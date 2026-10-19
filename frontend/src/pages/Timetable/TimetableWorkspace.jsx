@@ -141,7 +141,7 @@ function TimetableWorkspace() {
     setShowExportMenu(false);
     const win = window.open("", "_blank");
     if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><title>Campus Flow Timetable</title><style>
+    win.document.write(`<!DOCTYPE html><html><head><title>CampusFlow Timetable</title><style>
       *{margin:0;padding:0;box-sizing:border-box}
       body{font-family:Arial,sans-serif;padding:20px;font-size:12px}
       .header{text-align:center;margin-bottom:16px}
@@ -159,7 +159,7 @@ function TimetableWorkspace() {
       .empty-cell{color:#ddd}
       @media print{body{margin:5px}th,td{border:1px solid #666}}
     </style></head><body>
-      <div class="header"><h1>Campus Flow Scheduler</h1><p>Timetable</p></div>
+      <div class="header"><h1>CampusFlow Scheduler</h1><p>Timetable</p></div>
       <div id="content"></div></body></html>`);
     win.document.close();
 
@@ -308,7 +308,7 @@ function TimetableWorkspace() {
     <main className="timetable-page">
       <header className="tw-header">
         <div className="tw-header-left">
-          <div className="tw-logo"><span className="tw-logo-icon">CF</span><span>Campus Flow Scheduler</span></div>
+          <div className="tw-logo"><span className="tw-logo-icon">CF</span><span>CampusFlow Scheduler</span></div>
           <h1 className="tw-title">Timetable</h1>
           {selectedRun && <p className="tw-subtitle">Generated timetable &mdash; {selectedRun.status}{selectedRun.score ? ` (score: ${Number(selectedRun.score).toFixed(1)})` : ""}</p>}
         </div>

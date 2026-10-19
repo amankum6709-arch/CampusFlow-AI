@@ -5,7 +5,7 @@ from .api.routes import assistant, auth, health, organizations, resources, sync,
 from .db.session import settings
 
 
-app = FastAPI(title="Campus Flow AI API", version="2.1.0")
+app = FastAPI(title="CampusFlow AI API", version="2.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],

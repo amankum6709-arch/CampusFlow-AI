@@ -1,4 +1,4 @@
-# Campus Flow AI 2.0 - Local Development
+# CampusFlow AI 2.0 - Local Development
 
 ## Prerequisites
 - Python 3.12+

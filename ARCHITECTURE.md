@@ -1,4 +1,4 @@
-# Campus Flow AI 2.0 Architecture
+# CampusFlow AI 2.0 Architecture
 
 ## Core principle
 

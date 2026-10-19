@@ -1,4 +1,4 @@
-/* Real browser E2E test for Campus Flow using Puppeteer driving installed Chrome. */
+/* Real browser E2E test for CampusFlow using Puppeteer driving installed Chrome. */
 const puppeteer = require("puppeteer-core");
 const http = require("http");
 

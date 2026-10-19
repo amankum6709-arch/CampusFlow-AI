@@ -1,4 +1,4 @@
-# Campus Flow AI Scheduler Core
+# CampusFlow AI Scheduler Core
 
 This phase is the scheduler-core milestone. The browser heuristic remains available for compatibility, but the production scheduling contract now lives in `workers/scheduler/engine.py`.
 

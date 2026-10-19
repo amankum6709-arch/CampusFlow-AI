@@ -1,4 +1,4 @@
-"""Production-oriented CP-SAT timetable optimizer for Campus Flow.
+"""Production-oriented CP-SAT timetable optimizer for CampusFlow.
 
 The solver is deliberately independent from FastAPI and the database. It accepts a
 normalized JSON scheduling model and returns a deterministic, independently validated

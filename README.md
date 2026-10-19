@@ -1,6 +1,6 @@
-# CampusGlow AI
+# CampusFlow AI
 
-CampusGlow AI is a university timetable and resource-management application with:
+CampusFlow AI is a university timetable and resource-management application with:
 
 - React + Vite frontend
 - FastAPI + SQLAlchemy backend
@@ -12,7 +12,7 @@ CampusGlow AI is a university timetable and resource-management application with
 ## Project structure
 
 ```text
-Campus Glow/
+CampusFlow AI/
 ├── backend/
 │   ├── app/
 │   │   ├── api/routes/

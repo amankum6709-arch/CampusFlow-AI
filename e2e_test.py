@@ -1,4 +1,4 @@
-"""End-to-end test of the Campus Flow API."""
+"""End-to-end test of the CampusFlow API."""
 import json
 import sys
 import time

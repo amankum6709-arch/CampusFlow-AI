@@ -1,4 +1,4 @@
-"""Campus Flow demo seed — generates a complete 5-day university timetable.
+"""CampusFlow demo seed — generates a complete 5-day university timetable.
 
 Creates realistic demo data for a BCA (Bachelor of Computer Applications) program:
 - 8 courses across Theory and Lab
@@ -55,7 +55,7 @@ class Client:
 def main():
     client = Client()
     print("=" * 70)
-    print("Campus Flow demo seed — Full 5-Day University Timetable")
+    print("CampusFlow demo seed — Full 5-Day University Timetable")
     print("=" * 70)
 
     # ── 1. Auth ──────────────────────────────────────────────────────────

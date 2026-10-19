@@ -1,4 +1,4 @@
-"""Authentication & authorization helpers for Campus Flow API."""
+"""Authentication & authorization helpers for CampusFlow API."""
 from datetime import datetime, timedelta
 from typing import Any
 

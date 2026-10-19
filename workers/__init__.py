@@ -1,1 +1,1 @@
-"""Background workers for Campus Flow AI."""
+"""Background workers for CampusFlow AI."""

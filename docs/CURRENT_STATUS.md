@@ -1,6 +1,6 @@
 # Current Project Status
 
-This document records the cleanup pass applied to the uploaded Campus Glow project.
+This document records the cleanup pass applied to the uploaded CampusFlow AI project.
 
 ## Fixed
 
