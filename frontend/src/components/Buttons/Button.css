@@ -1,0 +1,42 @@
+/* =======================================
+   PRIMARY BUTTON
+   ======================================= */
+
+.primary-btn{
+    background:#2952FF;
+    color:white;
+    border:none;
+    padding:16px 32px;
+    border-radius:14px;
+    font-size:16px;
+    font-weight:600;
+    cursor:pointer;
+    transition:.3s;
+}
+
+.primary-btn:hover{
+    background:#1540f0;
+    transform:translateY(-3px);
+    box-shadow:0 15px 35px rgba(41,82,255,.25);
+}
+
+/* =======================================
+   SECONDARY BUTTON
+   ======================================= */
+
+.secondary-btn{
+    background:white;
+    color:#111827;
+    border:1px solid #E5E7EB;
+    padding:16px 30px;
+    border-radius:14px;
+    font-size:16px;
+    font-weight:600;
+    cursor:pointer;
+    transition:.3s;
+}
+
+.secondary-btn:hover{
+    box-shadow:0 10px 25px rgba(0,0,0,.08);
+    transform:translateY(-3px);
+}

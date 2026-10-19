@@ -1,0 +1,160 @@
+/* ============================================================
+   FOOTER — illustrated campus theme (landing only)
+   Scoped under .landing-footer so the login page (which reuses
+   Footer) keeps its previous unstyled appearance.
+   ============================================================ */
+
+.landing-footer .site-footer {
+  background:
+    radial-gradient(420px 120px at 12% 0%, rgba(85, 185, 242, 0.22), transparent 70%),
+    radial-gradient(420px 120px at 88% 0%, rgba(85, 185, 242, 0.16), transparent 70%),
+    linear-gradient(180deg, #14346F 0%, #102B62 100%);
+  color: #DCEBFF;
+  padding: 52px 32px 0;
+  margin-top: 24px;
+  border-top: 1px solid rgba(191, 232, 255, 0.25);
+}
+
+.landing-footer .footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 40px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid rgba(191, 232, 255, 0.2);
+  flex-wrap: wrap;
+}
+
+.landing-footer .footer-brand {
+  flex: 1;
+  min-width: 220px;
+}
+
+.landing-footer .footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.landing-footer .footer-logo-box {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #1769FF;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: -0.5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.landing-footer .footer-logo span {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.landing-footer .footer-tagline {
+  font-size: 14px;
+  color: #BFE8FF;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 300px;
+}
+
+.landing-footer .footer-links {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.landing-footer .footer-links a {
+  color: #DCEBFF;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+
+.landing-footer .footer-links a:hover,
+.landing-footer .footer-links a:focus-visible {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.landing-footer .footer-social {
+  display: flex;
+  gap: 12px;
+}
+
+.landing-footer .footer-social-link {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.landing-footer .footer-social-link:hover,
+.landing-footer .footer-social-link:focus-visible {
+  background: rgba(255, 255, 255, 0.24);
+  transform: translateY(-2px);
+}
+
+.landing-footer .footer-bottom {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 22px 0 26px;
+  text-align: center;
+  font-size: 13px;
+  color: #9DC0E8;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 768px) {
+  .landing-footer .site-footer {
+    padding: 40px 16px 0;
+  }
+
+  .landing-footer .footer-inner {
+    flex-direction: column;
+    gap: 28px;
+    align-items: center;
+    text-align: center;
+  }
+
+  .landing-footer .footer-tagline {
+    max-width: 100%;
+  }
+
+  .landing-footer .footer-links {
+    gap: 20px;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-footer .footer-social-link {
+    transition: none;
+  }
+
+  .landing-footer .footer-social-link:hover,
+  .landing-footer .footer-social-link:focus-visible {
+    transform: none;
+  }
+}

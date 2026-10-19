@@ -1,0 +1,5 @@
+/* Naam: App Layout CSS | Kya karta hai: Application wrapper ka basic layout define karta hai. */
+.app-layout {
+  min-height: 100vh;
+  width: 100%;
+}

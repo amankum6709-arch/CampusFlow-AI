@@ -1,0 +1,496 @@
+.timetable-page {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 24px 28px 60px;
+  color: #1a1a2e;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Header */
+.tw-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.tw-header-left { flex: 1; min-width: 300px; }
+.tw-header-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tw-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.tw-logo-icon {
+  background: #1e293b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.tw-title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.tw-subtitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* Buttons & Controls */
+.tw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.tw-btn-outline {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+.tw-btn-outline:hover { background: #f9fafb; border-color: #9ca3af; }
+.tw-btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+.tw-btn-primary:hover { background: #1d4ed8; }
+.tw-btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+.tw-btn-ghost {
+  background: transparent;
+  color: #64748b;
+  border: 1px solid transparent;
+}
+.tw-btn-ghost:hover { background: #f1f5f9; border-color: #e2e8f0; }
+
+.tw-select {
+  padding: 8px 32px 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  appearance: auto;
+}
+.tw-select-sm { padding: 6px 28px 6px 10px; font-size: 12px; }
+
+.tw-export-group { position: relative; }
+.tw-export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 100;
+  overflow: hidden;
+}
+.tw-export-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  color: #374151;
+}
+.tw-export-menu button:hover { background: #f3f4f6; }
+
+/* Alerts */
+.tw-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.tw-alert span:first-child {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.tw-alert button {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+}
+.tw-alert button:hover { opacity: 1; }
+.tw-alert-error { background: #fef2f2; color: #991b1b; }
+.tw-alert-error span:first-child { background: #ef4444; color: #fff; }
+.tw-alert-success { background: #f0fdf4; color: #166534; }
+.tw-alert-success span:first-child { background: #22c55e; color: #fff; }
+
+.tw-empty { padding: 24px; text-align: center; color: #64748b; }
+
+/* Stats */
+.tw-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.tw-stat {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 20px;
+  min-width: 100px;
+  text-align: center;
+}
+.tw-stat-wide { min-width: 140px; }
+.tw-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1.2;
+}
+.tw-stat-label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+/* Toolbar */
+.tw-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.tw-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tw-filter-group { display: flex; gap: 4px; }
+.tw-divider {
+  width: 1px;
+  height: 24px;
+  background: #e5e7eb;
+  margin: 0 4px;
+}
+.tw-chip {
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fff;
+  color: #64748b;
+  transition: all 0.15s;
+}
+.tw-chip:hover { border-color: #94a3b8; color: #334155; }
+.tw-chip-active { background: #1e293b; color: #fff; border-color: #1e293b; }
+.tw-legend { display: flex; gap: 12px; font-size: 12px; color: #64748b; }
+.tw-legend-item { display: flex; align-items: center; gap: 4px; }
+.tw-dot { width: 8px; height: 8px; border-radius: 50%; }
+.tw-dot-green { background: #22c55e; }
+.tw-dot-red { background: #ef4444; }
+.tw-dot-gold { background: #f59e0b; }
+
+/* AI Panel */
+.tw-ai {
+  background: #fff;
+  border: 1px solid #e0e7ff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.tw-ai-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+.tw-ai-badge {
+  background: #4f46e5;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.tw-ai-row { display: flex; gap: 8px; }
+.tw-ai-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+}
+.tw-ai-input:focus { border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
+.tw-ai-answer {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: #eef2ff;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #3730a3;
+}
+
+/* Empty state */
+.tw-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+.tw-empty-icon { margin-bottom: 16px; }
+.tw-empty-state h3 { margin: 0 0 8px; font-size: 18px; color: #1e293b; }
+.tw-empty-state p { margin: 0 0 20px; color: #64748b; font-size: 14px; }
+
+/* ============================================
+   TIMETABLE GRID - Reference Layout
+   Days as ROWS (left), Periods as COLUMNS (top)
+   ============================================ */
+.timetable-grid-wrapper {
+  overflow-x: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.tw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+/* Header Row: Day | Period 1 | Period 2 | ... | Period 8 */
+.tw-table thead th {
+  padding: 10px 8px;
+  background: #1e293b;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  border-right: 1px solid #334155;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.tw-table thead th:last-child { border-right: none; }
+
+.tw-th-day {
+  width: 70px;
+  min-width: 70px;
+  background: #0f172a;
+}
+
+.tw-th-period {
+  min-width: 140px;
+  padding: 8px 6px;
+}
+
+.tw-th-lunch {
+  background: #854d0e !important;
+  min-width: 90px;
+}
+
+.tw-period-number {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.tw-period-time {
+  font-size: 10px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+/* Day Rows */
+.tw-tr-day {
+  border-bottom: 2px solid #e5e7eb;
+}
+.tw-tr-day:last-child {
+  border-bottom: none;
+}
+
+.tw-td-day {
+  padding: 12px 8px;
+  background: #f0f4ff;
+  text-align: center;
+  vertical-align: middle;
+  font-weight: 800;
+  font-size: 13px;
+  color: #1e40af;
+  border-right: 2px solid #e5e7eb;
+  letter-spacing: 0.5px;
+}
+
+/* Lunch Column */
+.tw-td-lunch {
+  background: #fef3c7;
+  text-align: center;
+  vertical-align: middle;
+  border-right: 1px solid #fde68a;
+}
+.tw-td-lunch:last-child { border-right: none; }
+.tw-lunch-label {
+  font-weight: 700;
+  color: #92400e;
+  font-size: 12px;
+}
+
+/* Period Cells */
+.tw-td-cell {
+  padding: 4px;
+  vertical-align: top;
+  min-height: 80px;
+  background: #fff;
+  transition: background 0.1s;
+  border-right: 1px solid #f1f5f9;
+}
+.tw-td-cell:last-child { border-right: none; }
+.tw-td-cell:hover { background: #f8fafc; }
+.tw-td-filled { background: #fafbfc; }
+
+/* Class Cards */
+.tw-card {
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #3b82f6;
+  border-radius: 4px;
+  padding: 5px 6px;
+  margin-bottom: 3px;
+  cursor: grab;
+  font-size: 11px;
+  line-height: 1.3;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.tw-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+.tw-card:active { cursor: grabbing; }
+.tw-card-conflict { border-left-color: #ef4444 !important; background: #fef2f2 !important; }
+.tw-card-locked { opacity: 0.7; }
+
+.tw-card-subject {
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.3;
+  margin-bottom: 1px;
+}
+.tw-card-code {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-bottom: 2px;
+}
+.tw-card-faculty {
+  font-size: 10px;
+  color: #475569;
+  margin-bottom: 1px;
+}
+.tw-card-room {
+  font-size: 10px;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+.tw-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tw-card-section {
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 600;
+}
+.tw-card-badge {
+  font-size: 8px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+.tw-card-badge-lab {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+.tw-card-badge-lecture {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #3b82f6;
+}
+
+.tw-card-lock {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 2px;
+}
+.tw-card:hover .tw-card-lock { opacity: 0.6; }
+.tw-card-lock:hover { opacity: 1 !important; }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .tw-th-period { min-width: 120px; }
+  .tw-card { font-size: 10px; padding: 4px 5px; }
+}
+@media (max-width: 768px) {
+  .timetable-page { padding: 12px 14px 40px; }
+  .tw-title { font-size: 24px; }
+  .tw-th-period { min-width: 100px; }
+}

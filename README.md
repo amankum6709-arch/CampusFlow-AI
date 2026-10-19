@@ -1,0 +1,225 @@
+# CampusGlow AI
+
+CampusGlow AI is a university timetable and resource-management application with:
+
+- React + Vite frontend
+- FastAPI + SQLAlchemy backend
+- PostgreSQL for production/local Docker development
+- OR-Tools CP-SAT timetable optimization
+- Independent timetable validation
+- Server-side generation runs with a review/edit workspace
+
+## Project structure
+
+```text
+Campus Glow/
+├── backend/
+│   ├── app/
+│   │   ├── api/routes/
+│   │   ├── db/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   └── services/
+│   ├── alembic/
+│   │   └── versions/
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   ├── utils/
+│   │   └── workers/
+│   └── package.json
+├── workers/
+│   └── scheduler/
+├── docs/
+├── docker-compose.yml
+└── alembic.ini
+```
+
+The uploaded Windows `.venv` is intentionally **not included** in the clean project. Recreate it locally from `backend/requirements.txt`.
+
+## 1. Start PostgreSQL
+
+Recommended:
+
+```powershell
+docker compose up postgres -d
+```
+
+Or use an existing PostgreSQL 17+ server with the same database URL format.
+
+## 2. Create the backend environment
+
+From the repository root:
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+cd ..
+```
+
+For PowerShell execution-policy issues, run the activation command using your normal Windows Python environment policy, or start the API with the virtual-environment interpreter directly.
+
+## 3. Run migrations
+
+From the repository root:
+
+```powershell
+alembic upgrade head
+```
+
+The latest migration adds the timetable occurrence fields required by the server scheduler:
+
+- `session_id`
+- `unit_id`
+- `batch_id`
+- `group_name`
+- `student_count`
+
+## 4. Start the API
+
+```powershell
+uvicorn backend.app.main:app --reload --port 8000
+```
+
+Swagger/OpenAPI:
+
+```text
+http://localhost:8000/docs
+```
+
+Health check:
+
+```text
+http://localhost:8000/health
+```
+
+## 5. Start the frontend
+
+In a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+If the API uses a different address, create `frontend/.env` from `frontend/.env.example`.
+
+## Environment variables
+
+| Variable | Used by | Required | Purpose |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | backend | yes | PostgreSQL connection string (`postgresql+psycopg://…`) |
+| `CORS_ORIGINS` | backend | no | Allowed frontend origins (defaults to `http://localhost:5173`) |
+| `SECRET_KEY` | backend | recommended | JWT signing secret — set a long random value per environment |
+| `AI_PROVIDER` / `AI_API_KEY` | backend | no | Optional external AI provider; the assistant uses its rule-based engine when unset |
+| `VITE_API_URL` | frontend | no | API base URL (defaults to `http://localhost:8000/api/v1`) |
+
+Copy the provided `.env.example` files to `.env` and fill in real values. Never commit `.env` files.
+
+> Note: the checked-in code currently falls back to a hardcoded development JWT secret when `SECRET_KEY` is unset. Set `SECRET_KEY` in every non-local environment.
+
+## Timetable generation flow
+
+The server generation flow is:
+
+```text
+Setup wizard
+    ↓
+buildSchedulerConfiguration()
+    ↓
+POST /api/v1/timetable/generate
+    ↓
+TimetableRun = QUEUED
+    ↓
+background scheduler job
+    ↓
+normalize sessions
+    ↓
+CP-SAT solve
+    ↓
+independent validation
+    ↓
+save TimetableEntry rows
+    ↓
+TimetableRun = COMPLETED / FAILED
+    ↓
+Timetable workspace
+```
+
+A valid generation request must contain schedulable `sessions`, usable `rooms`, and `faculty`. The setup wizard builds these from the saved subjects, batches, sections and groups.
+
+## Lab scheduling
+
+Multi-group labs are represented as one `session_id` with multiple `unit_id` rows.
+
+Hard rules:
+
+- every lab group uses the same day/period
+- groups use different rooms
+- groups use different faculty
+- rooms must satisfy capacity/type/facility requirements
+- faculty availability and workload limits still apply
+
+Section/batch collision rules are applied per session, not per lab unit. This prevents the solver from incorrectly treating the intended lab groups as a conflict.
+
+## Editing generated timetables
+
+The workspace supports:
+
+- filtering all/conflicts/locked entries
+- locking/unlocking entries
+- drag-and-drop movement
+- server-side faculty/room/section/batch conflict checks
+
+Moving a multi-group lab occurrence moves its complete group set together so the lab cannot become partially synchronized.
+
+## AI assistant (proposals)
+
+The timetable page includes an action-taking assistant backed by `POST /api/v1/assistant/...` endpoints:
+
+```text
+POST /api/v1/assistant/runs/{run_id}/analyze
+POST /api/v1/assistant/runs/{run_id}/propose   (intent: fix_all | optimize | move_class)
+GET  /api/v1/assistant/proposals/{proposal_id}
+POST /api/v1/assistant/proposals/{proposal_id}/approve
+POST /api/v1/assistant/proposals/{proposal_id}/cancel
+POST /api/v1/assistant/runs/{run_id}/chat
+GET  /api/v1/assistant/runs/{run_id}/proposals
+```
+
+Proposals are stored in the `assistant_proposals` table (migration `0004_assistant_proposals`) and are only applied after explicit approval, staleness checks, and full constraint revalidation.
+
+## Tests
+
+From the repository root:
+
+```powershell
+python -m pytest -q backend/tests
+```
+
+The CP-SAT test requires OR-Tools, which is installed by `backend/requirements.txt`.
+
+## Optional local E2E scripts
+
+`frontend/e2e.test.cjs` and `frontend/debug-steps.cjs` drive a local Chrome via `puppeteer-core` against `http://localhost:5173` using the local demo account. They need a Chrome installation and are not part of `package.json`, so install `puppeteer-core` separately to use them.
+
+## Important development rule
+
+Do not commit `.env`, `.venv`, `node_modules`, or generated database files. Use the provided `.env.example` files instead.
