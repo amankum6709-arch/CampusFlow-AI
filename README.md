@@ -9,42 +9,80 @@ CampusFlow AI is a university timetable and resource-management application with
 - Independent timetable validation
 - Server-side generation runs with a review/edit workspace
 
+## Table of contents
+
+- [Project structure](#project-structure)
+- [Quick start](#quick-start)
+- [Environment variables](#environment-variables)
+- [Timetable generation flow](#timetable-generation-flow)
+- [Lab scheduling](#lab-scheduling)
+- [Editing generated timetables](#editing-generated-timetables)
+- [AI assistant (proposals)](#ai-assistant-proposals)
+- [Tests](#tests)
+- [Optional local E2E scripts](#optional-local-e2e-scripts)
+- [Important development rule](#important-development-rule)
+
 ## Project structure
 
 ```text
 CampusFlow AI/
 ├── backend/
+│   ├── alembic/
+│   │   ├── env.py
+│   │   └── versions/          # 0001_initial … 0004_assistant_proposals
 │   ├── app/
 │   │   ├── api/routes/
+│   │   ├── core/
 │   │   ├── db/
 │   │   ├── models/
 │   │   ├── schemas/
-│   │   └── services/
-│   ├── alembic/
-│   │   └── versions/
+│   │   ├── services/
+│   │   └── main.py
 │   ├── tests/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/
+│   ├── public/
 │   ├── src/
+│   │   ├── assets/
 │   │   ├── components/
+│   │   ├── layouts/
 │   │   ├── pages/
 │   │   ├── routes/
 │   │   ├── services/
+│   │   ├── styles/
 │   │   ├── utils/
 │   │   └── workers/
-│   └── package.json
+│   ├── debug-steps.cjs
+│   ├── e2e.test.cjs
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   └── .env.example
 ├── workers/
 │   └── scheduler/
 ├── docs/
+├── scripts/
+├── alembic.ini
 ├── docker-compose.yml
-└── alembic.ini
+├── e2e_test.py
+├── pytest.ini
+├── .env.example
+├── ARCHITECTURE.md
+├── DEV_SETUP.md
+├── PHASE-2-STATUS.md
+├── PHASE-3-STATUS.md
+└── LICENSE
 ```
 
-The uploaded Windows `.venv` is intentionally **not included** in the clean project. Recreate it locally from `backend/requirements.txt`.
+Local virtual environments (`.venv`/`.venv312`), `node_modules`, `.env` files, logs, and generated database files are ignored by Git and are not part of the repository. Recreate them with the steps below.
 
-## 1. Start PostgreSQL
+## Quick start
+
+**Prerequisites:** Python 3.12+, Node.js 20+, and Docker Desktop (recommended) or PostgreSQL 17+.
+
+### 1. Start PostgreSQL
 
 Recommended:
 
@@ -54,22 +92,22 @@ docker compose up postgres -d
 
 Or use an existing PostgreSQL 17+ server with the same database URL format.
 
-## 2. Create the backend environment
+### 2. Create the backend environment
 
 From the repository root:
 
 ```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
-cd ..
+python -m venv backend\.venv
+.\backend\.venv\Scripts\Activate.ps1
+pip install -r backend\requirements.txt
+Copy-Item .env.example .env
 ```
+
+Re-activate the virtual environment in each new terminal. The API and Alembic read `.env` from the current working directory, so this guide creates it at the repository root.
 
 For PowerShell execution-policy issues, run the activation command using your normal Windows Python environment policy, or start the API with the virtual-environment interpreter directly.
 
-## 3. Run migrations
+### 3. Run migrations
 
 From the repository root:
 
@@ -77,7 +115,7 @@ From the repository root:
 alembic upgrade head
 ```
 
-The latest migration adds the timetable occurrence fields required by the server scheduler:
+`0002_timetable_entry_details` adds the timetable occurrence fields required by the server scheduler:
 
 - `session_id`
 - `unit_id`
@@ -85,41 +123,30 @@ The latest migration adds the timetable occurrence fields required by the server
 - `group_name`
 - `student_count`
 
-## 4. Start the API
+The current migration head is `0004_assistant_proposals`.
+
+### 4. Start the API
 
 ```powershell
 uvicorn backend.app.main:app --reload --port 8000
 ```
 
-Swagger/OpenAPI:
+- Swagger/OpenAPI: <http://localhost:8000/docs>
+- Health check: <http://localhost:8000/health>
 
-```text
-http://localhost:8000/docs
-```
-
-Health check:
-
-```text
-http://localhost:8000/health
-```
-
-## 5. Start the frontend
+### 5. Start the frontend
 
 In a second terminal:
 
 ```powershell
-cd frontend
+Set-Location frontend
 npm install
 npm run dev
 ```
 
-Open:
+Open <http://localhost:5173>.
 
-```text
-http://localhost:5173
-```
-
-If the API uses a different address, create `frontend/.env` from `frontend/.env.example`.
+If the API uses a different address, create `frontend/.env` from `frontend/.env.example` and set `VITE_API_URL`.
 
 ## Environment variables
 
@@ -131,9 +158,9 @@ If the API uses a different address, create `frontend/.env` from `frontend/.env.
 | `AI_PROVIDER` / `AI_API_KEY` | backend | no | Optional external AI provider; the assistant uses its rule-based engine when unset |
 | `VITE_API_URL` | frontend | no | API base URL (defaults to `http://localhost:8000/api/v1`) |
 
-Copy the provided `.env.example` files to `.env` and fill in real values. Never commit `.env` files.
+Copy the provided `.env.example` files to `.env` and fill in real values. For the workflow above, the backend `.env` is created at the repository root; `frontend/.env` is optional. Never commit `.env` files.
 
-> Note: the checked-in code currently falls back to a hardcoded development JWT secret when `SECRET_KEY` is unset. Set `SECRET_KEY` in every non-local environment.
+> **Security note:** the checked-in code currently falls back to a hardcoded development JWT secret when `SECRET_KEY` is unset. Set `SECRET_KEY` in every non-local environment.
 
 ## Timetable generation flow
 
@@ -194,15 +221,17 @@ Moving a multi-group lab occurrence moves its complete group set together so the
 
 The timetable page includes an action-taking assistant backed by `POST /api/v1/assistant/...` endpoints:
 
-```text
-POST /api/v1/assistant/runs/{run_id}/analyze
-POST /api/v1/assistant/runs/{run_id}/propose   (intent: fix_all | optimize | move_class)
-GET  /api/v1/assistant/proposals/{proposal_id}
-POST /api/v1/assistant/proposals/{proposal_id}/approve
-POST /api/v1/assistant/proposals/{proposal_id}/cancel
-POST /api/v1/assistant/runs/{run_id}/chat
-GET  /api/v1/assistant/runs/{run_id}/proposals
-```
+| Method | Endpoint |
+| --- | --- |
+| `POST` | `/api/v1/assistant/runs/{run_id}/analyze` |
+| `POST` | `/api/v1/assistant/runs/{run_id}/propose` |
+| `GET` | `/api/v1/assistant/proposals/{proposal_id}` |
+| `POST` | `/api/v1/assistant/proposals/{proposal_id}/approve` |
+| `POST` | `/api/v1/assistant/proposals/{proposal_id}/cancel` |
+| `POST` | `/api/v1/assistant/runs/{run_id}/chat` |
+| `GET` | `/api/v1/assistant/runs/{run_id}/proposals` |
+
+`propose` accepts `fix_all`, `optimize`, or `move_class` as the intent.
 
 Proposals are stored in the `assistant_proposals` table (migration `0004_assistant_proposals`) and are only applied after explicit approval, staleness checks, and full constraint revalidation.
 
