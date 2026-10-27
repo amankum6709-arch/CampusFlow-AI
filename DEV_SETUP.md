@@ -20,6 +20,8 @@ DATABASE_URL=postgresql+psycopg://campusflow:campusflow@localhost:5432/campusflo
 CORS_ORIGINS=http://localhost:5173
 ```
 
+Set `SECRET_KEY` to a generated value. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"`; do not use a documented placeholder or commit the generated value.
+
 Create the Python environment:
 
 ```bash
@@ -59,7 +61,12 @@ Open `http://localhost:5173` and API docs at `http://localhost:8000/docs`.
 docker compose up --build
 ```
 
-The API container runs `alembic upgrade head` before starting Uvicorn.
+The API container does not run migrations automatically. Apply schema changes deliberately before starting the API:
+
+```bash
+docker compose run --rm api alembic upgrade head
+docker compose up --build
+```
 
 ## Scheduler API
 

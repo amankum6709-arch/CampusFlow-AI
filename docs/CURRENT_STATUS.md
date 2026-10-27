@@ -40,7 +40,7 @@ The one skipped test is the real CP-SAT integration test because this verificati
 
 ## Before first run
 
-Create `backend/.env`, create the Python virtual environment, install `backend/requirements.txt`, start PostgreSQL, run `alembic upgrade head`, then start FastAPI and the Vite frontend.
+Create `backend/.env` with `DATABASE_URL`, `CORS_ORIGINS`, and a random `SECRET_KEY`, create the Python virtual environment, install `backend/requirements.txt`, start PostgreSQL, run `alembic upgrade head`, then start FastAPI and the Vite frontend.
 
 For Swagger, use:
 

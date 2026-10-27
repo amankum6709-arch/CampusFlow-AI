@@ -3,6 +3,8 @@
 
 import { api } from "./api";
 
+let syncQueue = Promise.resolve();
+
 function currentOrgId() {
   try {
     const user = JSON.parse(localStorage.getItem("campusflow.user") || "null");
@@ -46,7 +48,11 @@ export async function loadBackendSetup() {
       name: item.name || `Section ${item.section_number || idx + 1}`,
       currentSemester: Number(item.semester || 1),
       studentCount: Number(item.student_count || 0),
-      admissionYear: meta.admissionYear || new Date().getFullYear(),
+      admissionYear:
+        Number(item.metadata_json?.admissionYear) ||
+        Number(meta.admissionYear) ||
+        new Date().getFullYear(),
+      admissionMonth: item.metadata_json?.admissionMonth || meta.admissionMonth || "",
       sectionCount: 1,
       groupsPerSection: 2,
       groupsEnabled: false,
@@ -112,6 +118,8 @@ export async function loadBackendSetup() {
     };
   });
 
+  const s = setupData || {};
+
   // Rooms -> wizard shape (deduplicate by name + campus + building to prevent duplicates)
   const campusesList = s.campuses || [];
   const campusMap = new Map();
@@ -150,8 +158,6 @@ export async function loadBackendSetup() {
   }
 
   // Build institution from real saved settings, with empty defaults (never hardcoded demo data).
-  const s = setupData || {};
-
   return {
     institution: {
       name: s.institution?.name || "",
@@ -198,7 +204,7 @@ export { currentOrgId };
 
 // Persist ALL wizard data to the backend — institution, campus, availability,
 // constraints (via setup endpoint) + faculty, rooms, courses, sessions (via sync).
-export async function saveSetupToBackend(setup) {
+async function performSetupSync(setup) {
   const orgId = currentOrgId();
   if (!orgId) return { created: [], updated: [], skipped: [] };
 
@@ -215,6 +221,7 @@ export async function saveSetupToBackend(setup) {
 
   // 2) Full-sync all resources (faculty, rooms, courses, classes, sessions)
   const facultyList = (setup.faculty || []).map((f) => ({
+    client_id: f.id,
     name: f.name,
     employee_code: f.employeeId || "",
     max_weekly_hours: Number(f.maxWeeklyHours || 0),
@@ -239,6 +246,7 @@ export async function saveSetupToBackend(setup) {
   }
 
   const roomsList = (setup.rooms || []).map((r) => ({
+    client_id: r.id,
     name: r.roomNumber || r.name,
     capacity: Number(r.capacity || 0),
     room_type: r.roomType || "classroom",
@@ -253,6 +261,7 @@ export async function saveSetupToBackend(setup) {
   }));
 
   const coursesList = (setup.courses || []).map((c) => ({
+    client_id: c.id,
     name: c.name,
     code: c.code || "",
     metadata_json: {
@@ -268,12 +277,18 @@ export async function saveSetupToBackend(setup) {
   for (const course of setup.courses || []) {
     for (const batch of course.batches || []) {
       classesList.push({
+        client_id: batch.id,
         name: batch.name,
+        course_id: course.id,
         courseName: course.name,
         batch_name: batch.name,
         section_number: batch.sections?.[0]?.number || 1,
         student_count: Number(batch.studentCount || 0),
         semester: Number(batch.currentSemester || 1),
+        metadata_json: {
+          admissionYear: Number(batch.admissionYear) || new Date().getFullYear(),
+          admissionMonth: batch.admissionMonth || "",
+        },
       });
     }
   }
@@ -286,9 +301,12 @@ export async function saveSetupToBackend(setup) {
       const batch = (course?.batches || []).find((b) => b.id === batchId);
       const section = batch?.sections?.[0];
       sessionsList.push({
+        client_id: `${sub.id}:${batchId}`,
         subject_name: sub.name,
         subject_code: sub.code,
+        course_id: course?.id,
         courseName: course?.name || "",
+        class_id: batch?.id,
         className: batch?.name || "",
         section_name: `${batch?.name || course?.name || ""} Section ${section?.number || 1}`,
         weekly_periods: Number(sub.weeklyPeriods || 1),
@@ -313,4 +331,22 @@ export async function saveSetupToBackend(setup) {
   });
 
   return result || { status: "failed" };
+}
+
+export function saveSetupToBackend(setup) {
+  const job = syncQueue.then(() => performSetupSync(setup));
+  syncQueue = job.catch(() => {});
+  return job;
+}
+
+export function resetSetupToBackend() {
+  const orgId = currentOrgId();
+  const job = syncQueue.then(() => {
+    if (!orgId) {
+      throw new Error("No organization found for the current account.");
+    }
+    return api.resetSetup(orgId);
+  });
+  syncQueue = job.catch(() => {});
+  return job;
 }

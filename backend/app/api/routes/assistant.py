@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ...core.security import get_current_user, require_org_scoped
+from ...core.security import get_current_user, require_admin, require_org_scoped
 from ...db.session import get_db
 from ...models import (
     AssistantProposal,
@@ -82,7 +82,7 @@ def analyze_run(run_id: str, user: User = Depends(get_current_user), db: Session
 def propose_changes(
     run_id: str,
     payload: AssistantProposeRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     run = _get_run(db, user, run_id)
@@ -158,7 +158,7 @@ def get_proposal(proposal_id: str, user: User = Depends(get_current_user), db: S
 
 
 @router.post("/proposals/{proposal_id}/approve")
-def approve_proposal(proposal_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def approve_proposal(proposal_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     proposal = db.get(AssistantProposal, proposal_id)
     if not proposal:
         raise HTTPException(404, "Proposal not found")
@@ -230,7 +230,7 @@ def approve_proposal(proposal_id: str, user: User = Depends(get_current_user), d
 
 
 @router.post("/proposals/{proposal_id}/cancel")
-def cancel_proposal(proposal_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def cancel_proposal(proposal_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     proposal = db.get(AssistantProposal, proposal_id)
     if not proposal:
         raise HTTPException(404, "Proposal not found")

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ...core.security import get_current_user, require_org_scoped
+from ...core.security import get_current_user, require_admin_for_writes, require_org_scoped
 from ...db.session import get_db
 from ...models import (
     AcademicClass,
@@ -38,7 +38,7 @@ from ...schemas.common import (
     RoomUpdate,
 )
 
-router = APIRouter(tags=["resources"])
+router = APIRouter(tags=["resources"], dependencies=[Depends(require_admin_for_writes)])
 
 
 def _get_owned(db: Session, model, entity_id: str, organization_id: str):

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000/api/v1" : "");
 
 function getToken() {
   return localStorage.getItem("campusflow.token") || "";
@@ -38,6 +38,10 @@ export function getCurrentUser() {
 }
 
 async function request(path, options = {}) {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_URL must be configured for production builds.");
+  }
+
   const token = getToken();
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -47,9 +51,9 @@ async function request(path, options = {}) {
     response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   } catch (err) {
     if (err.name === "TypeError" && err.message === "Failed to fetch") {
-      throw new Error("Cannot reach the server. Please check your internet connection and try again.");
+      throw new Error("Cannot reach the server. Please check your internet connection and try again.", { cause: err });
     }
-    throw new Error(err.message || "Network error. Please try again.");
+    throw new Error(err.message || "Network error. Please try again.", { cause: err });
   }
 
   if (!response.ok) {
@@ -79,6 +83,7 @@ export const api = {
   // Setup persistence
   getSetup: (orgId) => request(`/organizations/${encodeURIComponent(orgId)}/setup`),
   saveSetup: (orgId, payload) => request(`/organizations/${encodeURIComponent(orgId)}/setup`, { method: "PUT", body: JSON.stringify(payload) }),
+  resetSetup: (orgId) => request(`/organizations/${encodeURIComponent(orgId)}/setup`, { method: "DELETE" }),
 
   // Full sync
   fullSync: (payload) => request("/sync", { method: "POST", body: JSON.stringify(payload) }),

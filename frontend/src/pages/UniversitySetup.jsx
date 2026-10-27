@@ -27,8 +27,8 @@ import {
   validateRooms,
   validateSubjects,
 } from "../utils/validators";
-import { loadSetup, saveSetup } from "../services/storage";
-import { loadBackendSetup, saveSetupToBackend } from "../services/backendSync";
+import { clearSetup, loadSetup, saveSetup } from "../services/storage";
+import { currentOrgId, loadBackendSetup, resetSetupToBackend, saveSetupToBackend } from "../services/backendSync";
 import { isAuthenticated } from "../services/api";
 import { mergeImportedSetup } from "../utils/setupExcelImport";
 
@@ -56,7 +56,11 @@ function UniversitySetup() {
 
   // Naam: isLoaded
   // Kya karta hai: Saved browser data load hone tak UI ko stable rakhta hai.
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(() => !isAuthenticated());
+
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetState, setResetState] = useState("idle");
+  const [resetMessage, setResetMessage] = useState("");
 
   const setupRef = useRef(setup);
   useEffect(() => { setupRef.current = setup; }, [setup]);
@@ -123,9 +127,6 @@ function UniversitySetup() {
           if (saved) applySetup(saved);
           setIsLoaded(true);
         });
-    } else {
-      // Not authenticated: start with clean initial setup (already set as default state).
-      setIsLoaded(true);
     }
 
     return () => { cancelled = true; };
@@ -242,7 +243,7 @@ function UniversitySetup() {
     saveCurrentSetup(false);
 
     setCurrentStep((previous) =>
-      Math.min(previous + 1, STEPS.length),
+      Math.min(previous + 1, STEPS.length - 1),
     );
   };
 
@@ -267,6 +268,43 @@ function UniversitySetup() {
     const merged = mergeImportedSetup(importedData, setup);
     setSetup(merged);
     setCurrentStep(STEPS.length - 1);
+  };
+
+  const openResetDialog = () => {
+    if (resetState === "resetting") return;
+    setResetMessage("");
+    setResetState("idle");
+    setResetDialogOpen(true);
+  };
+
+  const closeResetDialog = () => {
+    if (resetState === "resetting") return;
+    setResetDialogOpen(false);
+    setResetState("idle");
+    setResetMessage("");
+  };
+
+  const handleResetSetup = async () => {
+    if (resetState === "resetting") return;
+    setResetState("resetting");
+    setResetMessage("");
+
+    try {
+      if (isAuthenticated()) {
+        await resetSetupToBackend();
+      }
+      const orgId = currentOrgId();
+      clearSetup(orgId);
+      localStorage.removeItem("campusflow.lastSetupSave");
+      setSetup(createInitialSetup());
+      setCurrentStep(0);
+      setResetDialogOpen(false);
+      setResetState("success");
+      setResetMessage("All setup data for this institution has been reset.");
+    } catch (error) {
+      setResetState("error");
+      setResetMessage(error.message || "Could not reset setup data. Please try again.");
+    }
   };
 
   if (!isLoaded) {
@@ -295,11 +333,31 @@ function UniversitySetup() {
           </p>
         </div>
 
-        <div className="step-counter">
-          {currentStep === 0 ? "Get Started" : `Step ${currentStep} of ${STEPS.length - 1}`}
+        <div className="setup-header-meta">
+          <div className="step-counter">
+            {currentStep === 0 ? "Get Started" : `Step ${currentStep} of ${STEPS.length - 1}`}
+          </div>
+          <button
+            type="button"
+            className="reset-setup-button"
+            onClick={openResetDialog}
+            disabled={resetState === "resetting"}
+          >
+            Reset Setup
+          </button>
         </div>
         <span className="setup-doodle" aria-hidden="true">Small steps, big schedules!</span>
       </header>
+
+      {resetMessage && !resetDialogOpen && (
+        <div
+          className={`setup-reset-status ${resetState}`}
+          role={resetState === "error" ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {resetMessage}
+        </div>
+      )}
 
       {/* Naam: Setup Progress
           Kya karta hai: Admin ko 9-step setup ki current position aur completion status dikhata hai. */}
@@ -335,6 +393,7 @@ function UniversitySetup() {
       <main className="setup-card">
         {currentStep === 0 && (
           <SetupMethodStep
+            setup={setup}
             onManualSetup={() => setCurrentStep(1)}
             onExcelImport={handleExcelImportComplete}
           />
@@ -427,15 +486,8 @@ function UniversitySetup() {
           <ReviewGenerate
             setup={setup}
             onTimetableGenerated={handleTimetableGenerated}
-            onImportComplete={(importedSetup) => {
-              setSetup((prev) => ({
-                ...prev,
-                ...importedSetup,
-                institution: prev.institution,
-                availability: prev.availability,
-                constraints: prev.constraints,
-              }));
-            }}
+            onGoToStep={(step) => setCurrentStep(Math.max(0, Math.min(step, STEPS.length - 1)))}
+            onImportComplete={handleExcelImportComplete}
           />
         )}
 
@@ -461,7 +513,7 @@ function UniversitySetup() {
               Save Progress
             </button>
 
-            {currentStep < STEPS.length && (
+            {currentStep < STEPS.length - 1 && (
               <button
                 type="button"
                 className="continue-button"
@@ -474,6 +526,53 @@ function UniversitySetup() {
         </footer>
         )}
       </main>
+
+      {resetDialogOpen && (
+        <div
+          className="reset-dialog-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeResetDialog();
+          }}
+        >
+          <div
+            className="reset-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-setup-title"
+            aria-describedby="reset-setup-description"
+          >
+            <h2 id="reset-setup-title">Reset Setup?</h2>
+            <p id="reset-setup-description">
+              Are you sure you want to delete all setup data for this institution? This will remove data entered manually and imported through Excel. This action cannot be undone.
+            </p>
+
+            {resetState === "error" && resetMessage && (
+              <div className="reset-dialog-error" role="alert">
+                {resetMessage}
+              </div>
+            )}
+
+            <div className="reset-dialog-actions">
+              <button
+                type="button"
+                className="reset-cancel-button"
+                onClick={closeResetDialog}
+                disabled={resetState === "resetting"}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="reset-confirm-button"
+                onClick={handleResetSetup}
+                disabled={resetState === "resetting"}
+              >
+                {resetState === "resetting" ? "Resetting..." : "Reset Setup"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

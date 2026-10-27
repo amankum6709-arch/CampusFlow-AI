@@ -205,6 +205,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 .tw-filter-group { display: flex; gap: 4px; }
 .tw-divider {
@@ -232,6 +234,83 @@
 .tw-dot-green { background: #22c55e; }
 .tw-dot-red { background: #ef4444; }
 .tw-dot-gold { background: #f59e0b; }
+
+/* Course and batch selection */
+.tw-course-select { max-width: 220px; }
+.tw-batch-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 280px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.tw-batch-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.tw-batch-tab:hover { border-color: #93c5fd; color: #1d4ed8; }
+.tw-batch-tab-active {
+  background: #1e293b;
+  border-color: #1e293b;
+  color: #fff;
+}
+.tw-batch-tab-count {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 700;
+}
+.tw-batch-tab-active .tw-batch-tab-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.tw-group-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 18px 22px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 70%);
+}
+.tw-group-kicker {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.tw-group-heading h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.3;
+}
+.tw-group-heading p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
 
 /* AI Panel */
 .tw-ai {
@@ -493,4 +572,8 @@
   .timetable-page { padding: 12px 14px 40px; }
   .tw-title { font-size: 24px; }
   .tw-th-period { min-width: 100px; }
+  .tw-course-select { max-width: 100%; }
+  .tw-batch-tabs { flex-basis: 100%; }
+  .tw-group-heading { padding: 14px 16px; }
+  .tw-group-heading h2 { font-size: 17px; }
 }

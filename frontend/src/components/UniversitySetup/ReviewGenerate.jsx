@@ -11,9 +11,11 @@ import SetupStepHeader from "./SetupStepHeader";
 import SetupStepIllustrations from "./SetupStepIllustrations";
 import UpgradePrompt from "../UpgradePrompt/UpgradePrompt";
 import { buildSchedulerConfiguration, ensureOrganization } from "../../services/serverScheduling";
+import { saveSetupToBackend } from "../../services/backendSync";
+import { remapSchedulerConfiguration } from "../../services/idMapping";
 import { api, isAuthenticated } from "../../services/api";
 import { downloadSetupTemplate } from "../../utils/setupExcelExport";
-import { importSetupFile, validateImportedSetup, mergeImportedSetup } from "../../utils/setupExcelImport";
+import { importSetupFile, validateImportedSetup } from "../../utils/setupExcelImport";
 import { hasFeature, FEATURES } from "../../utils/subscription";
 
 // ── Readiness check items ────────────────────────────────────
@@ -101,7 +103,7 @@ function computeReadiness(setup) {
 }
 
 // ── Component ────────────────────────────────────────────────
-function ReviewGenerate({ setup, onTimetableGenerated, onImportComplete }) {
+function ReviewGenerate({ setup, onTimetableGenerated, onImportComplete, onGoToStep }) {
   const navigate = useNavigate();
   const [mode, setMode] = useState("all");
   const [selectedCourseIds, setSelectedCourseIds] = useState(
@@ -189,20 +191,20 @@ function ReviewGenerate({ setup, onTimetableGenerated, onImportComplete }) {
     setImportStatus({ type: "loading", message: "Importing setup data..." });
     try {
       const importedData = await importSetupFile(file);
-      const errors = validateImportedSetup(importedData);
-      if (errors.length > 0) {
+      const validation = validateImportedSetup(importedData, setup);
+      const importErrors = [...(importedData.errors || []), ...validation.errors];
+      if (importErrors.length > 0) {
         setImportStatus({
           type: "error",
-          message: `Import errors: ${errors.join("; ")}`,
+          message: `Import errors: ${importErrors.join("; ")}`,
         });
         return;
       }
-      const merged = mergeImportedSetup(setup, importedData);
       setImportStatus({
         type: "success",
         message: "Setup data imported successfully!",
       });
-      if (onImportComplete) onImportComplete(merged);
+      if (onImportComplete) onImportComplete(importedData);
     } catch (err) {
       setImportStatus({ type: "error", message: `Import failed: ${err.message}` });
     } finally {
@@ -252,11 +254,19 @@ function ReviewGenerate({ setup, onTimetableGenerated, onImportComplete }) {
     setServerStatus("Saving setup data to database...");
     try {
       const organizationId = await ensureOrganization(setup);
+      const syncResult = await saveSetupToBackend(setup);
+      if (syncResult?.status !== "ok" || !syncResult.id_map) {
+        throw new Error("Could not synchronize setup with the database. Please save again and retry.");
+      }
+
       setGenState("generating");
       setServerStatus("Submitting to scheduler...");
 
       const selectedIds = getSelectedSubjectIds();
-      const configuration = buildSchedulerConfiguration(setup, selectedIds);
+      const configuration = remapSchedulerConfiguration(
+        buildSchedulerConfiguration(setup, selectedIds),
+        syncResult.id_map,
+      );
 
       const run = await api.generateTimetable({
         organization_id: organizationId,
@@ -579,11 +589,7 @@ function ReviewGenerate({ setup, onTimetableGenerated, onImportComplete }) {
               onClick={() => {
                 const firstFail = failedItems[0];
                 if (firstFail && firstFail.step) {
-                  window.dispatchEvent(
-                    new CustomEvent("setup-goto-step", {
-                      detail: { step: firstFail.step },
-                    }),
-                  );
+                  onGoToStep?.(firstFail.step);
                 }
               }}
             >

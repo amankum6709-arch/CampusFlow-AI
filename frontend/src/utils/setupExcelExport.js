@@ -1,17 +1,16 @@
 // ============================================================
 // Naam: Setup Excel Export
 // Kya karta hai: Professional Excel template download karta hai
-//                with 9 sheets: Instructions, Timetable, Rooms,
-//                Faculty, Subjects, Batches, Courses, Availability,
-//                Constraints. Blank template with headers, formatting,
-//                data validation, and freeze panes — no fake data.
+//                with 11 sheets: Instructions, Institution, Campus,
+//                Timetable, Rooms, Faculty, Subjects, Batches, Courses,
+//                Availability, Constraints. Blank template with headers,
+//                formatting, data validation, and freeze panes - no fake data.
 // ============================================================
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+import { CAMPUS_MODES, INSTITUTION_TYPES } from "./constants.js";
 
 // ── Reusable style definitions ──
 const BRAND = "1e3a5f";
-const BRAND_LIGHT = "e8f0fe";
 const WHITE = "ffffff";
 const BORDER_COLOR = "c0c0c0";
 
@@ -27,13 +26,6 @@ const headerStyle = () => ({
   fill: { fgColor: { rgb: BRAND }, patternType: "solid" },
   alignment: { horizontal: "center", vertical: "center", wrapText: true },
   border: thinBorder(),
-});
-
-const dataCellFormat = (isTime) => ({
-  font: { sz: 11, name: "Calibri" },
-  alignment: { horizontal: "left", vertical: "center", wrapText: false },
-  border: thinBorder(),
-  numFmt: isTime ? "HH:MM" : undefined,
 });
 
 const createDataValidation = (sqref, type, formula1) => ({
@@ -52,7 +44,7 @@ const createDataValidation = (sqref, type, formula1) => ({
 // ============================================================
 
 const buildDataSheet = (XLSX, headers, options = {}) => {
-  const { colWidths, validation, timeColumns = [], freezeRow = true, autoFilter = true, rowHeight = 22 } = options;
+  const { colWidths, validation, timeColumns = [], freezeRow = true, autoFilter = true } = options;
 
   // Build sheet with just headers first
   const sheet = XLSX.utils.aoa_to_sheet([headers]);
@@ -108,198 +100,114 @@ const buildDataSheet = (XLSX, headers, options = {}) => {
 // ============================================================
 
 const buildInstructionsSheet = (XLSX) => {
-  // Build the content as array-of-arrays
-  const rows = [
-    // Row 1: Title (spanning conceptually across columns)
-    ["CampusFlow Excel Template"],
-    // Row 2: Subtitle
-    ["Use this workbook to enter your university timetable and supporting data, then upload the completed workbook back into CampusFlow."],
-    // Row 3: blank
-    [""],
-    // Row 4: Section — HOW TO USE
-    ["HOW TO USE"],
-    // Row 5-10: Steps
-    ["1.", "Fill in the supporting sheets (Rooms, Faculty, Subjects, Batches, Courses)."],
-    ["2.", "Enter timetable records in the Timetable sheet."],
-    ["3.", "Set faculty availability and scheduling constraints."],
-    ["4.", "Keep all required fields completed."],
-    ["5.", "Save the workbook as .xlsx format."],
-    ["6.", "Upload it back into CampusFlow via the Excel Import panel."],
-    ["7.", "CampusFlow will validate the uploaded data and check for conflicts."],
-    // Row 11: blank
-    [""],
-    // Row 12: Section — SHEETS
-    ["SHEETS IN THIS WORKBOOK"],
-    // Row 13-20: Sheet descriptions
-    ["Timetable", "Main sheet. Enter scheduled classes with day, time, course, subject, faculty, and room."],
-    ["Rooms", "Enter rooms with building, floor, room type, and capacity."],
-    ["Faculty", "Enter faculty members with employee ID and department."],
-    ["Subjects", "Enter subjects with subject codes and the course they belong to."],
-    ["Batches", "Enter batches with course, section, and student counts."],
-    ["Courses", "Enter courses with course codes and duration in years."],
-    ["Availability", "Enter faculty availability by day and time range."],
-    ["Constraints", "Enter scheduling rules like max classes per day and lunch break."],
-    // Row 21: blank
-    [""],
-    // Row 22: Section — IMPORTANT RULES
-    ["IMPORTANT RULES"],
-    // Row 23-28: Rules
-    ["", "Blank means blank. Do not invent placeholder values."],
-    ["", "Days must use full names: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday."],
-    ["", "Time should use HH:MM 24-hour format (e.g., 09:00, 14:30)."],
-    ["", "The same subject can have multiple faculty members."],
-    ["", "Conflicts are checked after upload, not in this workbook."],
-    ["", "Do not delete or rename required headers."],
-    // Row 29: blank
-    [""],
-    // Row 30: Section — FIELD REFERENCE
-    ["FIELD REFERENCE"],
-    // Row 31-38: Headers for each sheet
-    ["Timetable", "Day, Start Time, End Time, Course, Batch, Section, Subject, Subject Code, Faculty, Faculty ID, Room"],
-    ["Rooms", "Room, Building, Floor, Room Type, Capacity"],
-    ["Faculty", "Faculty Name, Faculty ID, Department"],
-    ["Subjects", "Subject, Subject Code, Course"],
-    ["Batches", "Batch, Course, Section, Students"],
-    ["Courses", "Course, Course Code, Duration"],
-    ["Availability", "Faculty, Day, Start Time, End Time, Available"],
-    ["Constraints", "Constraint Type, Description, Enabled"],
-  ];
+  const rows = [];
+  const rowStyles = [];
+
+  const addRow = (values, style = {}) => {
+    rows.push(values);
+    rowStyles.push(style);
+  };
+
+  const addBlank = () => addRow([""], {});
+  const addSection = (title) => addRow([title], {
+    font: { bold: true, sz: 13, name: "Calibri", color: { rgb: BRAND } },
+    alignment: { horizontal: "left", vertical: "center" },
+    border: { bottom: { style: "medium", color: { rgb: BRAND } } },
+  });
+  const addText = (label, text) => addRow([label, text], {
+    font: { sz: 11, name: "Calibri" },
+    alignment: { horizontal: "left", vertical: "center", wrapText: true },
+  });
+
+  addRow(["CampusFlow Excel Template"], {
+    font: { bold: true, sz: 20, name: "Calibri", color: { rgb: BRAND } },
+    alignment: { horizontal: "left", vertical: "center" },
+  });
+  addRow(["Use this workbook to enter your university timetable and supporting data, then upload the completed workbook back into CampusFlow."], {
+    font: { italic: true, sz: 11, name: "Calibri", color: { rgb: "555555" } },
+    alignment: { horizontal: "left", vertical: "center", wrapText: true },
+  });
+  addBlank();
+
+  addSection("HOW TO USE");
+  addText("1.", "Fill in the Institution and Campus sheets with your institution details, campuses, and buildings.");
+  addText("2.", "Fill in the supporting sheets (Rooms, Faculty, Subjects, Batches, Courses).");
+  addText("3.", "Enter timetable records in the Timetable sheet.");
+  addText("4.", "Set faculty availability and scheduling constraints.");
+  addText("5.", "Keep all required fields completed.");
+  addText("6.", "Save the workbook as .xlsx format.");
+  addText("7.", "Upload it back into CampusFlow via the Excel Import panel.");
+  addText("8.", "CampusFlow will validate the uploaded data and check for conflicts.");
+  addBlank();
+
+  addSection("SHEETS IN THIS WORKBOOK");
+  addText("Institution", "Enter institution name, type, academic year, contact location, website, and campus mode.");
+  addText("Campus", "Enter each campus and its buildings/blocks. Add one row per building.");
+  addText("Timetable", "Main sheet. Enter scheduled classes with day, time, course, subject, faculty, and room.");
+  addText("Rooms", "Enter rooms with campus, building, floor, room type, and capacity.");
+  addText("Faculty", "Enter faculty members with employee ID, department, and subject codes they teach.");
+  addText("Subjects", "Enter subjects with subject codes and the course they belong to.");
+  addText("Batches", "Enter batches with course, section, student count, and admission year.");
+  addText("Courses", "Enter courses with course codes, duration in years, campus, and building.");
+  addText("Availability", "Enter faculty availability by day and time range.");
+  addText("Constraints", "Enter scheduling rules like max classes per day and lunch break.");
+  addBlank();
+
+  addSection("IMPORTANT RULES");
+  addText("", "Blank means blank. Do not invent placeholder values.");
+  addText("", "Days must use full names: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.");
+  addText("", "Time should use HH:MM 24-hour format (e.g., 09:00, 14:30).");
+  addText("", "Campus Mode must be Single or Multiple. Use Multiple when you add more than one campus.");
+  addText("", "Faculty subject codes may be comma-separated. The same subject can have multiple faculty members.");
+  addText("", "Admission Year is required per batch and must be a four-digit year.");
+  addText("", "Conflicts are checked after upload, not in this workbook.");
+  addText("", "Do not delete or rename required headers.");
+  addBlank();
+
+  addSection("FIELD REFERENCE");
+  addText("Institution", "Institution Name, Short Name, Institution Type, Academic Year Start, City, State, Country, Established, Website, Campus Mode");
+  addText("Campus", "Campus Name, Building Name, Building Code");
+  addText("Timetable", "Day, Start Time, End Time, Course, Batch, Section, Subject, Subject Code, Faculty, Faculty ID, Room");
+  addText("Rooms", "Room, Campus, Building, Floor, Room Type, Capacity");
+  addText("Faculty", "Faculty Name, Faculty ID, Department, Subject Codes");
+  addText("Subjects", "Subject, Subject Code, Course");
+  addText("Batches", "Batch, Course, Section, Students, Admission Year, Admission Month");
+  addText("Courses", "Course, Course Code, Duration, Campus, Building");
+  addText("Availability", "Faculty, Day, Start Time, End Time, Available");
+  addText("Constraints", "Constraint Type, Description, Enabled");
 
   const sheet = XLSX.utils.aoa_to_sheet(rows);
 
-  // Column widths: A is narrow label column, B is wide content column
   sheet["!cols"] = [
     { wch: 22 },
     { wch: 95 },
   ];
 
-  // Row styles
-  const rowStyles = [];
-
-  // Row 1: Title — large bold
-  rowStyles.push({
-    font: { bold: true, sz: 20, name: "Calibri", color: { rgb: BRAND } },
-    alignment: { horizontal: "left", vertical: "center" },
-  });
-
-  // Row 2: Subtitle — italic, muted
-  rowStyles.push({
-    font: { italic: true, sz: 11, name: "Calibri", color: { rgb: "555555" } },
-    alignment: { horizontal: "left", vertical: "center", wrapText: true },
-  });
-
-  // Row 3: blank
-  rowStyles.push({});
-
-  // Row 4: Section heading "HOW TO USE"
-  rowStyles.push({
-    font: { bold: true, sz: 13, name: "Calibri", color: { rgb: BRAND } },
-    alignment: { horizontal: "left", vertical: "center" },
-    border: { bottom: { style: "medium", color: { rgb: BRAND } } },
-  });
-
-  // Rows 5-11: Steps + blank
-  for (let i = 5; i <= 11; i++) {
-    if (i === 11) {
-      rowStyles.push({});
-    } else {
-      rowStyles.push({
-        font: { sz: 11, name: "Calibri" },
-        alignment: { horizontal: "left", vertical: "center", wrapText: true },
-      });
-    }
-  }
-
-  // Row 12: Section heading "SHEETS IN THIS WORKBOOK"
-  rowStyles.push({
-    font: { bold: true, sz: 13, name: "Calibri", color: { rgb: BRAND } },
-    alignment: { horizontal: "left", vertical: "center" },
-    border: { bottom: { style: "medium", color: { rgb: BRAND } } },
-  });
-
-  // Rows 13-20: Sheet descriptions
-  for (let i = 13; i <= 20; i++) {
-    rowStyles.push({
-      font: { sz: 11, name: "Calibri" },
-      alignment: { horizontal: "left", vertical: "center", wrapText: true },
-    });
-  }
-
-  // Row 21: blank
-  rowStyles.push({});
-
-  // Row 22: Section heading "IMPORTANT RULES"
-  rowStyles.push({
-    font: { bold: true, sz: 13, name: "Calibri", color: { rgb: BRAND } },
-    alignment: { horizontal: "left", vertical: "center" },
-    border: { bottom: { style: "medium", color: { rgb: BRAND } } },
-  });
-
-  // Rows 23-28: Rules
-  for (let i = 23; i <= 28; i++) {
-    rowStyles.push({
-      font: { sz: 11, name: "Calibri" },
-      alignment: { horizontal: "left", vertical: "center", wrapText: true },
-    });
-  }
-
-  // Row 29: blank
-  rowStyles.push({});
-
-  // Row 30: Section heading "FIELD REFERENCE"
-  rowStyles.push({
-    font: { bold: true, sz: 13, name: "Calibri", color: { rgb: BRAND } },
-    alignment: { horizontal: "left", vertical: "center" },
-    border: { bottom: { style: "medium", color: { rgb: BRAND } } },
-  });
-
-  // Rows 31-38: Field reference
-  for (let i = 31; i <= 38; i++) {
-    rowStyles.push({
-      font: { sz: 11, name: "Calibri" },
-      alignment: { horizontal: "left", vertical: "center", wrapText: true },
-    });
-  }
-
-  // Apply styles to cells in column A and B
   for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
     const style = rowStyles[rowIdx] || {};
-
-    // Style cell A{rowIdx+1}
     const cellA = sheet[`A${rowIdx + 1}`];
-    if (cellA) {
-      cellA.s = { ...style };
-      // For section headings, apply to column A only with bold
-      if (style.font && style.font.bold && style.font.sz === 13) {
-        cellA.s.font = { ...style.font };
-      }
-    }
+    if (cellA) cellA.s = { ...style };
 
-    // Style cell B{rowIdx+1}
     const cellB = sheet[`B${rowIdx + 1}`];
     if (cellB) {
-      cellB.s = { ...style };
-      // For section headings in B, don't apply heading style
-      if (style.font && style.font.bold && style.font.sz === 13) {
-        cellB.s = {
-          font: { sz: 11, name: "Calibri" },
-          alignment: { horizontal: "left", vertical: "center", wrapText: true },
-        };
-      }
+      cellB.s = style.font?.sz === 13
+        ? {
+            font: { sz: 11, name: "Calibri" },
+            alignment: { horizontal: "left", vertical: "center", wrapText: true },
+          }
+        : { ...style };
     }
   }
 
-  // Set row heights for better spacing
   sheet["!rows"] = rows.map((row, idx) => {
     const content = row.join(" ");
-    if (idx === 0) return { hpt: 36 }; // Title
-    if (idx === 1) return { hpt: 30 }; // Subtitle
-    if (row[0] && typeof row[0] === "string" && row[0] === row[0].toUpperCase() && row[0].length > 3) return { hpt: 28 }; // Section headings
-    if (content.trim() === "") return { hpt: 10 }; // Blank rows
-    return { hpt: 22 }; // Normal rows
+    if (idx === 0) return { hpt: 36 };
+    if (idx === 1) return { hpt: 30 };
+    if (row[0] && typeof row[0] === "string" && row[0] === row[0].toUpperCase() && row[0].length > 3) return { hpt: 28 };
+    if (content.trim() === "") return { hpt: 10 };
+    return { hpt: 22 };
   });
 
-  // Freeze at row 4 (below title + subtitle + blank)
   sheet["!freeze"] = { xSplit: 0, ySplit: 3 };
 
   return sheet;
@@ -310,7 +218,7 @@ const buildInstructionsSheet = (XLSX) => {
 // Kya karta hai: Workbook build karke download karta hai.
 // ============================================================
 
-export const downloadSetupTemplate = async () => {
+export const buildSetupTemplateWorkbook = async () => {
   const XLSX = await import("xlsx");
 
   const workbook = XLSX.utils.book_new();
@@ -322,7 +230,72 @@ export const downloadSetupTemplate = async () => {
     "Instructions"
   );
 
-  // ── Sheet 2: Timetable ──
+  // ── Sheet 2: Institution ──
+  const institutionHeaders = [
+    "Institution Name",
+    "Short Name",
+    "Institution Type",
+    "Academic Year Start",
+    "City",
+    "State",
+    "Country",
+    "Established",
+    "Website",
+    "Campus Mode",
+  ];
+
+  const institutionTypeValidation = createDataValidation(
+    "C2:C1000",
+    "list",
+    `"${INSTITUTION_TYPES.join(",")}"`
+  );
+
+  const campusModeValidation = createDataValidation(
+    "J2:J1000",
+    "list",
+    `"${CAMPUS_MODES.map((mode) => mode.charAt(0).toUpperCase() + mode.slice(1)).join(",")}"`
+  );
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    buildDataSheet(XLSX, institutionHeaders, {
+      colWidths: [
+        { wch: 32 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 14 },
+        { wch: 26 },
+        { wch: 16 },
+      ],
+      validation: [institutionTypeValidation, campusModeValidation],
+    }),
+    "Institution"
+  );
+
+  // ── Sheet 3: Campus ──
+  const campusHeaders = [
+    "Campus Name",
+    "Building Name",
+    "Building Code",
+  ];
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    buildDataSheet(XLSX, campusHeaders, {
+      colWidths: [
+        { wch: 28 },
+        { wch: 28 },
+        { wch: 18 },
+      ],
+    }),
+    "Campus"
+  );
+
+  // ── Sheet 4: Timetable ──
   const timetableHeaders = [
     "Day",
     "Start Time",
@@ -365,9 +338,10 @@ export const downloadSetupTemplate = async () => {
     "Timetable"
   );
 
-  // ── Sheet 3: Rooms ──
+  // ── Sheet 5: Rooms ──
   const roomHeaders = [
     "Room",
+    "Campus",
     "Building",
     "Floor",
     "Room Type",
@@ -379,6 +353,7 @@ export const downloadSetupTemplate = async () => {
     buildDataSheet(XLSX, roomHeaders, {
       colWidths: [
         { wch: 16 }, // Room
+        { wch: 22 }, // Campus
         { wch: 20 }, // Building
         { wch: 10 }, // Floor
         { wch: 18 }, // Room Type
@@ -388,11 +363,12 @@ export const downloadSetupTemplate = async () => {
     "Rooms"
   );
 
-  // ── Sheet 4: Faculty ──
+  // ── Sheet 6: Faculty ──
   const facultyHeaders = [
     "Faculty Name",
     "Faculty ID",
     "Department",
+    "Subject Codes",
   ];
 
   XLSX.utils.book_append_sheet(
@@ -402,6 +378,7 @@ export const downloadSetupTemplate = async () => {
         { wch: 26 }, // Faculty Name
         { wch: 16 }, // Faculty ID
         { wch: 26 }, // Department
+        { wch: 30 }, // Subject Codes
       ],
     }),
     "Faculty"
@@ -426,12 +403,14 @@ export const downloadSetupTemplate = async () => {
     "Subjects"
   );
 
-  // ── Sheet 6: Batches ──
+  // ── Sheet 8: Batches ──
   const batchHeaders = [
     "Batch",
     "Course",
     "Section",
     "Students",
+    "Admission Year",
+    "Admission Month",
   ];
 
   XLSX.utils.book_append_sheet(
@@ -442,16 +421,20 @@ export const downloadSetupTemplate = async () => {
         { wch: 28 }, // Course
         { wch: 12 }, // Section
         { wch: 12 }, // Students
+        { wch: 16 }, // Admission Year
+        { wch: 18 }, // Admission Month
       ],
     }),
     "Batches"
   );
 
-  // ── Sheet 7: Courses ──
+  // ── Sheet 9: Courses ──
   const courseHeaders = [
     "Course",
     "Course Code",
     "Duration",
+    "Campus",
+    "Building",
   ];
 
   XLSX.utils.book_append_sheet(
@@ -461,6 +444,8 @@ export const downloadSetupTemplate = async () => {
         { wch: 30 }, // Course
         { wch: 18 }, // Course Code
         { wch: 12 }, // Duration
+        { wch: 22 }, // Campus
+        { wch: 22 }, // Building
       ],
     }),
     "Courses"
@@ -529,5 +514,10 @@ export const downloadSetupTemplate = async () => {
     "Constraints"
   );
 
+  return { XLSX, workbook };
+};
+
+export const downloadSetupTemplate = async () => {
+  const { XLSX, workbook } = await buildSetupTemplateWorkbook();
   XLSX.writeFile(workbook, "CampusFlow_Excel_Template.xlsx");
 };

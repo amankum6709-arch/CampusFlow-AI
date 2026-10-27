@@ -6370,3 +6370,157 @@
 .university-setup .faculty-dropzone strong {
   color: #FFFFFF;
 }
+
+/* ============================================================
+   Naam: Reset Setup
+   Kya karta hai: Organization setup reset karne ka safe action,
+   confirmation dialog aur result banner style karta hai.
+   ============================================================ */
+
+.university-setup .setup-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.university-setup .reset-setup-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #F87171;
+  border-radius: 10px;
+  background: #102344;
+  color: #FECACA;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.university-setup .reset-setup-button:hover {
+  background: #7F1D1D;
+  border-color: #FCA5A5;
+  color: #FFFFFF;
+}
+
+.university-setup .reset-setup-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.university-setup .setup-reset-status {
+  width: min(1100px, 100%);
+  margin: -8px auto 18px;
+  padding: 11px 14px;
+  border: 1px solid #29466F;
+  border-radius: 10px;
+  background: #102344;
+  color: #F8FAFC;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.university-setup .setup-reset-status.success {
+  border-color: #34D399;
+  color: #34D399;
+}
+
+.university-setup .setup-reset-status.error {
+  border-color: #F87171;
+  color: #FECACA;
+}
+
+.reset-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(7, 18, 38, 0.78);
+  backdrop-filter: blur(5px);
+}
+
+.reset-dialog {
+  width: min(460px, 100%);
+  padding: 26px;
+  border: 1px solid #29466F;
+  border-radius: 16px;
+  background: #102344;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  color: #F8FAFC;
+}
+
+.reset-dialog h2 {
+  margin: 0 0 10px;
+  color: #FFFFFF;
+  font-size: 22px;
+}
+
+.reset-dialog p {
+  margin: 0;
+  color: #BAE6FD;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.reset-dialog-error {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #F87171;
+  border-radius: 9px;
+  background: #0B1933;
+  color: #FECACA;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reset-dialog-actions {
+  margin-top: 22px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.reset-dialog-actions button {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reset-cancel-button {
+  border: 1px solid #29466F;
+  background: #0B1933;
+  color: #F8FAFC;
+}
+
+.reset-confirm-button {
+  border: 1px solid #DC2626;
+  background: #DC2626;
+  color: #FFFFFF;
+}
+
+.reset-confirm-button:hover {
+  background: #B91C1C;
+  border-color: #B91C1C;
+}
+
+.reset-dialog-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .university-setup .setup-header {
+    flex-wrap: wrap;
+  }
+
+  .university-setup .setup-header-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

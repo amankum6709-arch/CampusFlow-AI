@@ -8,16 +8,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ...core.security import get_current_user, require_org_scoped
+from ...core.security import get_current_user, require_admin_for_writes, require_org_scoped
 from ...db.session import get_db
 from ...models import AcademicClass, AcademicSession, Course, Faculty, Organization, Room, User
 
-router = APIRouter(tags=["sync"])
+router = APIRouter(tags=["sync"], dependencies=[Depends(require_admin_for_writes)])
 
 
 class SyncPayload:
     """Pydantic-free dict payload — validated at call site."""
     pass
+
+
+def _client_id(item: dict) -> str | None:
+    value = item.get("client_id") or item.get("id")
+    return str(value) if value else None
+
+
+def _id_map(result: list[dict]) -> dict[str, str]:
+    return {item["client_id"]: item["id"] for item in result if item.get("client_id")}
 
 
 def _upsert_faculty(db: Session, org_id: str, items: list[dict]) -> list[dict]:
@@ -45,7 +54,7 @@ def _upsert_faculty(db: Session, org_id: str, items: list[dict]) -> list[dict]:
             )
             db.add(f)
         db.flush()
-        result.append({"id": f.id, "name": f.name})
+        result.append({"id": f.id, "name": f.name, "client_id": _client_id(item)})
     for f in existing:
         if f.name not in incoming_names:
             db.delete(f)
@@ -87,7 +96,7 @@ def _upsert_rooms(db: Session, org_id: str, items: list[dict]) -> list[dict]:
             )
             db.add(r)
         db.flush()
-        result.append({"id": r.id, "name": r.name})
+        result.append({"id": r.id, "name": r.name, "client_id": _client_id(item)})
     for r in existing:
         if _room_key(r) not in incoming_keys:
             db.delete(r)
@@ -116,7 +125,7 @@ def _upsert_courses(db: Session, org_id: str, items: list[dict]) -> list[dict]:
             )
             db.add(c)
         db.flush()
-        result.append({"id": c.id, "name": c.name})
+        result.append({"id": c.id, "name": c.name, "client_id": _client_id(item)})
     for c in existing:
         if c.name not in incoming_names:
             db.delete(c)
@@ -155,7 +164,12 @@ def _upsert_classes(db: Session, org_id: str, items: list[dict], course_id_map: 
             )
             db.add(ac)
         db.flush()
-        result.append({"id": ac.id, "name": ac.name, "course_id": ac.course_id})
+        result.append({
+            "id": ac.id,
+            "name": ac.name,
+            "course_id": ac.course_id,
+            "client_id": _client_id(item),
+        })
     for ac in existing:
         if (ac.course_id, ac.name) not in incoming_keys:
             db.delete(ac)
@@ -205,7 +219,11 @@ def _upsert_sessions(db: Session, org_id: str, items: list[dict], course_id_map:
             )
             db.add(s)
         db.flush()
-        result.append({"id": s.id, "subject_code": s.subject_code})
+        result.append({
+            "id": s.id,
+            "subject_code": s.subject_code,
+            "client_id": _client_id(item),
+        })
     for s in existing:
         key = (s.course_id, s.subject_code or s.subject_name, s.section_name)
         if key not in incoming_keys:
@@ -232,20 +250,14 @@ def full_sync(payload: dict, user: User = Depends(get_current_user), db: Session
 
     course_result = _upsert_courses(db, org_id, courses_raw)
     course_id_map = {c["name"]: c["id"] for c in course_result}
-    for c in courses_raw:
-        if c.get("id") and c.get("name") in course_id_map:
-            course_id_map[c["id"]] = course_id_map[c["name"]]
-            course_id_map[c["name"]] = c["id"]
+    course_id_map.update(_id_map(course_result))
 
     faculty_result = _upsert_faculty(db, org_id, faculty_raw)
     rooms_result = _upsert_rooms(db, org_id, rooms_raw)
 
     class_result = _upsert_classes(db, org_id, classes_raw, course_id_map)
     class_id_map = {c["name"]: c["id"] for c in class_result}
-    for c in classes_raw:
-        if c.get("id") and c.get("name") in class_id_map:
-            class_id_map[c["id"]] = class_id_map[c["name"]]
-            class_id_map[c["name"]] = c["id"]
+    class_id_map.update(_id_map(class_result))
 
     session_result = _upsert_sessions(db, org_id, sessions_raw, course_id_map, class_id_map)
 
@@ -257,4 +269,11 @@ def full_sync(payload: dict, user: User = Depends(get_current_user), db: Session
         "rooms": len(rooms_result),
         "classes": len(class_result),
         "sessions": len(session_result),
+        "id_map": {
+            "courses": _id_map(course_result),
+            "faculty": _id_map(faculty_result),
+            "rooms": _id_map(rooms_result),
+            "classes": _id_map(class_result),
+            "sessions": _id_map(session_result),
+        },
     }

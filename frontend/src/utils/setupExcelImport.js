@@ -2,18 +2,21 @@
 // Naam: Setup Excel Import
 // Kya karta hai: Excel/CSV setup data ko read, validate aur merge
 //                karta hai CampusFlow ke existing setup ke saath.
-//                Supports 9 sheets: Institution, Campus, Rooms,
-//                Courses, Batches, Subjects, Faculty, Availability,
-//                Constraints.
+//                Supports 11 sheets: Institution, Campus, Timetable,
+//                Rooms, Courses, Batches, Subjects, Faculty, Availability,
+//                Constraints, and Instructions.
 // ============================================================
 
 import {
   createId,
-} from "./helpers";
+} from "./helpers.js";
 import {
+  CAMPUS_MODES,
+  INSTITUTION_TYPES,
   ROOM_TYPES,
   SUBJECT_TYPES,
-} from "./constants";
+} from "./constants.js";
+import { createSections } from "./setupDefaults.js";
 
 // ============================================================
 // Naam: normalizeHeader
@@ -80,6 +83,38 @@ const parseList = (value) =>
     .split(/[,;|\n]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+
+const hasValue = (value) =>
+  value !== "" && value !== undefined && value !== null;
+
+const hasMergeValue = (value) => {
+  if (!hasValue(value)) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "string") return value.trim() !== "";
+  return true;
+};
+
+const normalizeKey = (value) =>
+  String(value || "").trim().toLowerCase();
+
+const normalizeCampusMode = (value) => {
+  const mode = normalizeKey(value);
+  if (mode === "multiple" || mode === "multi") return "multiple";
+  if (mode === "single") return "single";
+  return "";
+};
+
+const normalizeInstitutionType = (value) => {
+  const type = normalizeKey(value);
+  return INSTITUTION_TYPES.find((item) => normalizeKey(item) === type) || "";
+};
+
+const parseYear = (value, fallback) => {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  const year = Number(raw);
+  return Number.isInteger(year) ? year : NaN;
+};
 
 // ============================================================
 // Naam: normalizeDay
@@ -330,7 +365,8 @@ const readRowsFromFile = async (file) => {
       return allRows;
     } catch (error) {
       throw new Error(
-        "Excel import ke liye frontend folder mein 'npm install xlsx' run karo."
+        "Excel import ke liye frontend folder mein 'npm install xlsx' run karo.",
+        { cause: error }
       );
     }
   }
@@ -358,6 +394,7 @@ export const importSetupFile = async (file) => {
   }
 
   const institution = {};
+  let campusMode = "";
   const campuses = [];
   const rooms = [];
   const courses = [];
@@ -371,19 +408,37 @@ export const importSetupFile = async (file) => {
 
   const sheetsSeen = new Set();
 
+  const setInstitutionField = (key, value) => {
+    if (!hasValue(value)) return;
+    const text = String(value).trim();
+    if (text) institution[key] = text;
+  };
+
   rows.forEach((row, index) => {
     const sheetName = (row._sheet || "").toLowerCase();
 
     // ---- Institution Sheet ----
     if (sheetName.includes("institut")) {
       sheetsSeen.add("institution");
-      institution.name = String(getValue(row, ["Institution Name", "Name", "University Name", "InstitutionName"])).trim();
-      institution.shortName = String(getValue(row, ["Short Name", "ShortName", "Abbreviation"])).trim();
-      institution.type = String(getValue(row, ["Type", "Institution Type", "Category"])).trim();
-      institution.academicYearStart = parseNumeric(getValue(row, ["Academic Year Start", "AcademicYear", "Year Start"]), new Date().getFullYear());
-      institution.city = String(getValue(row, ["City", "Town"])).trim();
-      institution.state = String(getValue(row, ["State", "Province", "Region"])).trim();
-      institution.country = String(getValue(row, ["Country"])).trim();
+
+      setInstitutionField("name", getValue(row, ["Institution Name", "Name", "University Name", "InstitutionName"]));
+      setInstitutionField("shortName", getValue(row, ["Short Name", "ShortName", "Abbreviation"]));
+      setInstitutionField("type", getValue(row, ["Type", "Institution Type", "Category"]));
+      setInstitutionField("city", getValue(row, ["City", "Town"]));
+      setInstitutionField("state", getValue(row, ["State", "Province", "Region"]));
+      setInstitutionField("country", getValue(row, ["Country"]));
+      setInstitutionField("established", getValue(row, ["Established", "Established Year", "Founded"]));
+      setInstitutionField("website", getValue(row, ["Website", "Web Site", "URL"]));
+
+      const academicYearStartRaw = getValue(row, ["Academic Year Start", "AcademicYear", "Year Start"]);
+      if (hasValue(academicYearStartRaw) && String(academicYearStartRaw).trim()) {
+        institution.academicYearStart = parseYear(academicYearStartRaw, NaN);
+      }
+
+      const modeRaw = getValue(row, ["Campus Mode", "CampusMode", "Mode"]);
+      if (hasValue(modeRaw) && String(modeRaw).trim()) {
+        campusMode = String(modeRaw).trim();
+      }
     }
 
     // ---- Campus Sheet ----
@@ -393,19 +448,37 @@ export const importSetupFile = async (file) => {
       const buildingName = String(getValue(row, ["Building Name", "Building", "BuildingName", "Block"])).trim();
       const buildingCode = String(getValue(row, ["Building Code", "Code", "BuildingCode"])).trim();
 
+      if (!campusName && !buildingName) return;
+
+      const normalizedCampusName = campusName || "Main Campus";
       let campusEntry = campuses.find(
-        (c) => c.name.toLowerCase() === campusName.toLowerCase()
+        (c) => normalizeKey(c.name) === normalizeKey(normalizedCampusName)
       );
       if (!campusEntry) {
-        campusEntry = { id: createId("campus"), name: campusName || "Main Campus", buildings: [] };
+        campusEntry = {
+          id: createId("campus"),
+          name: normalizedCampusName,
+          buildings: [],
+        };
         campuses.push(campusEntry);
       }
+
       if (buildingName) {
-        campusEntry.buildings.push({
-          id: createId("building"),
-          name: buildingName,
-          code: buildingCode,
-        });
+        const existingBuilding = campusEntry.buildings.find(
+          (building) => normalizeKey(building.name) === normalizeKey(buildingName)
+        );
+
+        if (existingBuilding) {
+          if (!existingBuilding.code && buildingCode) {
+            existingBuilding.code = buildingCode;
+          }
+        } else {
+          campusEntry.buildings.push({
+            id: createId("building"),
+            name: buildingName,
+            code: buildingCode,
+          });
+        }
       }
     }
 
@@ -446,9 +519,13 @@ export const importSetupFile = async (file) => {
         getValue(row, ["Facilities", "Facility", "Amenities", "Features"])
       );
 
-      const available = parseBool(
-        getValue(row, ["Available", "Available For Timetable", "Timetable Available", "Is Available", "Active"])
+      const availableRaw = getValue(
+        row,
+        ["Available", "Available For Timetable", "Timetable Available", "Is Available", "Active"]
       );
+      const timetableAvailable = hasValue(availableRaw) && String(availableRaw).trim()
+        ? parseBool(availableRaw)
+        : true;
 
       if (!roomNumber) {
         errors.push(`Row ${index + 2} (Rooms): Room number is missing.`);
@@ -467,7 +544,7 @@ export const importSetupFile = async (file) => {
         buildingId: "",
         floor,
         facilities,
-        timetableAvailable: available || true,
+        timetableAvailable,
       });
     }
 
@@ -527,14 +604,18 @@ export const importSetupFile = async (file) => {
         getValue(row, ["Batch Name", "Batch", "BatchName", "Name"])
       ).trim();
 
-      const admissionYear = parseNumeric(
-        getValue(row, ["Admission Year", "Year", "Year Of Admission"]),
-        new Date().getFullYear()
+      const admissionYearRaw = getValue(
+        row,
+        ["Admission Year", "Year", "Year Of Admission"]
       );
+      const admissionYear = parseYear(admissionYearRaw, new Date().getFullYear());
 
       const admissionMonth = String(
         getValue(row, ["Admission Month", "Month"])
-      ).trim() || "August";
+      ).trim();
+
+      const sectionRaw = getValue(row, ["Section", "Section Number", "SectionNumber"]);
+      const sectionNumber = parseNumeric(sectionRaw, 1);
 
       const studentCount = parseNumeric(
         getValue(row, ["Student Count", "Students", "Count", "Strength"]),
@@ -546,11 +627,17 @@ export const importSetupFile = async (file) => {
         return;
       }
 
+      if (hasValue(admissionYearRaw) && String(admissionYearRaw).trim() && !Number.isInteger(admissionYear)) {
+        errors.push(`Row ${index + 2} (Batches): Admission Year must be a four-digit year.`);
+        return;
+      }
+
       batches.push({
         courseName,
         batchName: batchName || `${courseName} ${admissionYear}`,
         admissionYear,
         admissionMonth,
+        sectionNumber,
         studentCount,
       });
     }
@@ -616,21 +703,26 @@ export const importSetupFile = async (file) => {
       ).trim();
 
       const employeeId = String(
-        getValue(row, ["Employee ID", "EmployeeId", "Employee Code", "Employee", "Emp ID"])
+        getValue(row, ["Faculty ID", "Employee ID", "EmployeeId", "Employee Code", "Employee", "Emp ID"])
       ).trim();
 
       const department = String(
         getValue(row, ["Department", "Department Name", "DepartmentName", "Dept"])
       ).trim();
 
-      const maxClassesPerDay = parseNumeric(
-        getValue(row, ["Max Classes Per Day", "Max Classes", "Daily Limit", "Max Daily"]),
-        4
+      const maxClassesPerDayRaw = getValue(
+        row,
+        ["Max Classes Per Day", "Max Classes", "Daily Limit", "Max Daily"]
       );
+      const maxClassesPerDay = hasValue(maxClassesPerDayRaw) && String(maxClassesPerDayRaw).trim()
+        ? parseNumeric(maxClassesPerDayRaw, 4)
+        : null;
 
-      const availableDays = parseDays(
-        getValue(row, ["Available Days", "Working Days", "Days", "Availability"])
+      const availableDaysRaw = getValue(
+        row,
+        ["Available Days", "Working Days", "Days", "Availability"]
       );
+      const availableDays = parseDays(availableDaysRaw);
 
       const subjectCodes = parseList(
         getValue(row, ["Subject Codes", "Subject Code", "Subjects", "Subject", "Teaches"])
@@ -649,9 +741,7 @@ export const importSetupFile = async (file) => {
         subjectIds: [],
         subjectCodes,
         maxClassesPerDay,
-        availableDays: availableDays.length
-          ? availableDays
-          : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        availableDays: availableDays.length ? availableDays : null,
         leaveDates: [],
       });
     }
@@ -708,19 +798,22 @@ export const importSetupFile = async (file) => {
       if (breakAfter > 0) constraints.breakAfterPeriods = breakAfter;
       const breakDuration = parseNumeric(getValue(row, ["Break Duration (minutes)", "BreakDuration"]));
       if (breakDuration > 0) constraints.breakDuration = breakDuration;
-      const allowSat = parseBool(getValue(row, ["Allow Saturday", "AllowSaturday", "Saturday"]));
-      constraints.allowSaturday = allowSat;
+      const allowSatRaw = getValue(row, ["Allow Saturday", "AllowSaturday", "Saturday"]);
+      if (hasValue(allowSatRaw) && String(allowSatRaw).trim()) {
+        constraints.allowSaturday = parseBool(allowSatRaw);
+      }
     }
   });
 
   if (!sheetsSeen.size && rows.length > 0) {
     errors.push(
-      "No recognized sheet names found. Use sheet names: Timetable, Rooms, Faculty, Subjects, Batches, Courses, Availability, Constraints."
+      "No recognized sheet names found. Use sheet names: Institution, Campus, Timetable, Rooms, Faculty, Subjects, Batches, Courses, Availability, Constraints."
     );
   }
 
   return {
     institution,
+    campusMode,
     campuses,
     rooms,
     courses,
@@ -746,56 +839,132 @@ export const validateImportedSetup = (
   const valid = [];
   const errors = [];
 
-  const existingRooms =
-    existingSetup.rooms || [];
-  const existingCourses =
-    existingSetup.courses || [];
-  const existingSubjects =
-    existingSetup.subjects || [];
-  const existingFaculty =
-    existingSetup.faculty || [];
+  const importedInstitution = imported.institution || {};
+  const importedCampuses = imported.campuses || [];
+  const importedRooms = imported.rooms || [];
+  const importedCourses = imported.courses || [];
+  const importedBatches = imported.batches || [];
+  const importedSubjects = imported.subjects || [];
+  const importedFaculty = imported.faculty || [];
 
-  // ---- Validate Institution (optional, just check structure) ----
-  if (imported.institution && Object.keys(imported.institution).length > 0) {
-    valid.push({ type: "institution", data: imported.institution });
+  const existingCampuses = existingSetup.campuses || [];
+  const existingCourses = existingSetup.courses || [];
+  const existingSubjects = existingSetup.subjects || [];
+
+  const allCampuses = [...existingCampuses, ...importedCampuses];
+  const allCourses = [...existingCourses, ...importedCourses];
+  const allSubjects = [...existingSubjects, ...importedSubjects];
+
+  const campusNames = new Set(
+    allCampuses.map((campus) => normalizeKey(campus.name)).filter(Boolean)
+  );
+  const buildingKeys = new Set();
+  allCampuses.forEach((campus) => {
+    const campusKey = normalizeKey(campus.name);
+    (campus.buildings || []).forEach((building) => {
+      const buildingKey = normalizeKey(building.name);
+      if (!buildingKey) return;
+      buildingKeys.add(buildingKey);
+      if (campusKey) buildingKeys.add(`${campusKey}|${buildingKey}`);
+    });
+  });
+
+  const courseNames = new Set(
+    allCourses.map((course) => normalizeKey(course.name)).filter(Boolean)
+  );
+  const subjectCodes = new Set(
+    allSubjects.map((subject) => normalizeKey(subject.code)).filter(Boolean)
+  );
+
+  const validateLocation = (label, campusName, buildingName) => {
+    const campusKey = normalizeKey(campusName);
+    const buildingKey = normalizeKey(buildingName);
+
+    if (campusKey && !campusNames.has(campusKey)) {
+      errors.push(`${label}: Campus "${campusName}" not found.`);
+      return false;
+    }
+
+    if (buildingKey) {
+      const found = campusKey
+        ? buildingKeys.has(`${campusKey}|${buildingKey}`)
+        : buildingKeys.has(buildingKey);
+      if (!found) {
+        errors.push(`${label}: Building "${buildingName}" not found.`);
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // ---- Validate Institution ----
+  if (Object.keys(importedInstitution).length > 0) {
+    if (importedInstitution.type && !normalizeInstitutionType(importedInstitution.type)) {
+      errors.push(
+        `Institution: Invalid institution type "${importedInstitution.type}". Use ${INSTITUTION_TYPES.join(", ")}.`
+      );
+    }
+
+    if (
+      importedInstitution.academicYearStart !== undefined &&
+      (!Number.isInteger(importedInstitution.academicYearStart) ||
+        importedInstitution.academicYearStart < 1900 ||
+        importedInstitution.academicYearStart > 2200)
+    ) {
+      errors.push("Institution: Academic Year Start must be a four-digit year.");
+    }
+
+    valid.push({ type: "institution", data: importedInstitution });
+  }
+
+  // ---- Validate Campus Mode ----
+  if (imported.campusMode && !CAMPUS_MODES.includes(normalizeCampusMode(imported.campusMode))) {
+    errors.push(
+      `Institution: Invalid Campus Mode "${imported.campusMode}". Use Single or Multiple.`
+    );
+  } else {
+    const uniqueCampusCount = new Set(
+      allCampuses.map((campus) => normalizeKey(campus.name)).filter(Boolean)
+    ).size;
+    if (normalizeCampusMode(imported.campusMode) === "single" && uniqueCampusCount > 1) {
+      errors.push(
+        "Institution: Campus Mode is Single but more than one campus is present. Use Multiple."
+      );
+    }
   }
 
   // ---- Validate Campuses ----
-  if (imported.campuses && imported.campuses.length > 0) {
-    imported.campuses.forEach((campus, index) => {
-      if (!campus.name) {
-        errors.push(`Campus row ${index + 1}: Campus name is required.`);
-        return;
-      }
-      valid.push({ type: "campus", data: campus });
-    });
-  }
+  importedCampuses.forEach((campus, index) => {
+    if (!campus.name) {
+      errors.push(`Campus row ${index + 1}: Campus name is required.`);
+      return;
+    }
+    valid.push({ type: "campus", data: campus });
+  });
 
   // ---- Validate Rooms ----
-  imported.rooms.forEach((room, index) => {
+  importedRooms.forEach((room, index) => {
     if (!room.roomNumber) {
       errors.push(`Rooms row ${index + 1}: Room number is required.`);
       return;
     }
 
-    if (
-      !Number.isFinite(room.capacity) ||
-      room.capacity < 1
-    ) {
+    if (!Number.isFinite(room.capacity) || room.capacity < 1) {
       errors.push(
         `Rooms row ${index + 1} (${room.roomNumber}): Capacity must be greater than 0.`
       );
       return;
     }
 
-    if (
-      room.roomType &&
-      !ROOM_TYPES.includes(room.roomType) &&
-      room.roomType !== "Other"
-    ) {
+    if (room.roomType && !ROOM_TYPES.includes(room.roomType) && room.roomType !== "Other") {
       errors.push(
         `Rooms row ${index + 1} (${room.roomNumber}): Invalid room type "${room.roomType}".`
       );
+      return;
+    }
+
+    if (!validateLocation(`Rooms row ${index + 1} (${room.roomNumber})`, room.campusName, room.buildingName)) {
       return;
     }
 
@@ -803,19 +972,20 @@ export const validateImportedSetup = (
   });
 
   // ---- Validate Courses ----
-  imported.courses.forEach((course, index) => {
+  importedCourses.forEach((course, index) => {
     if (!course.name) {
       errors.push(`Courses row ${index + 1}: Course name is required.`);
       return;
     }
 
-    if (
-      !Number.isFinite(course.duration) ||
-      course.duration < 1
-    ) {
+    if (!Number.isFinite(course.duration) || course.duration < 1) {
       errors.push(
         `Courses row ${index + 1} (${course.name}): Duration must be greater than 0.`
       );
+      return;
+    }
+
+    if (!validateLocation(`Courses row ${index + 1} (${course.name})`, course.campusName, course.buildingName)) {
       return;
     }
 
@@ -823,47 +993,48 @@ export const validateImportedSetup = (
   });
 
   // ---- Validate Batches ----
-  if (imported.batches && imported.batches.length > 0) {
-    imported.batches.forEach((batch, index) => {
-      if (!batch.courseName && !batch.batchName) {
-        errors.push(`Batches row ${index + 1}: Course name or batch name is required.`);
-        return;
-      }
-      valid.push({ type: "batch", data: batch });
-    });
-  }
+  importedBatches.forEach((batch, index) => {
+    if (!batch.courseName) {
+      errors.push(`Batches row ${index + 1}: Course name is required.`);
+      return;
+    }
+
+    if (!courseNames.has(normalizeKey(batch.courseName))) {
+      errors.push(
+        `Batches row ${index + 1}: Course "${batch.courseName}" not found in existing or imported courses.`
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(batch.admissionYear) ||
+      batch.admissionYear < 1900 ||
+      batch.admissionYear > 2200
+    ) {
+      errors.push(
+        `Batches row ${index + 1} (${batch.batchName}): Admission Year must be a four-digit year.`
+      );
+      return;
+    }
+
+    valid.push({ type: "batch", data: batch });
+  });
 
   // ---- Validate Subjects ----
-  imported.subjects.forEach((subject, index) => {
+  importedSubjects.forEach((subject, index) => {
     if (!subject.name) {
       errors.push(`Subjects row ${index + 1}: Subject name is required.`);
       return;
     }
 
-    const courseExists =
-      subject.courseName &&
-      (existingCourses.some(
-        (c) =>
-          c.name.toLowerCase() ===
-          subject.courseName.toLowerCase()
-      ) ||
-        imported.courses.some(
-          (c) =>
-            c.name.toLowerCase() ===
-            subject.courseName.toLowerCase()
-        ));
-
-    if (subject.courseName && !courseExists) {
+    if (subject.courseName && !courseNames.has(normalizeKey(subject.courseName))) {
       errors.push(
         `Subjects row ${index + 1} (${subject.name}): Course "${subject.courseName}" not found in existing or imported courses.`
       );
       return;
     }
 
-    if (
-      subject.type &&
-      !SUBJECT_TYPES.includes(subject.type)
-    ) {
+    if (subject.type && !SUBJECT_TYPES.includes(subject.type)) {
       errors.push(
         `Subjects row ${index + 1} (${subject.name}): Invalid subject type "${subject.type}".`
       );
@@ -874,9 +1045,20 @@ export const validateImportedSetup = (
   });
 
   // ---- Validate Faculty ----
-  imported.faculty.forEach((person, index) => {
+  importedFaculty.forEach((person, index) => {
     if (!person.name) {
       errors.push(`Faculty row ${index + 1}: Faculty name is required.`);
+      return;
+    }
+
+    const unknownCodes = (person.subjectCodes || []).filter(
+      (code) => !subjectCodes.has(normalizeKey(code))
+    );
+
+    if (unknownCodes.length > 0) {
+      errors.push(
+        `Faculty row ${index + 1} (${person.name}): Unknown subject code(s): ${unknownCodes.join(", ")}.`
+      );
       return;
     }
 
@@ -898,271 +1080,427 @@ export const mergeImportedSetup = (
   imported,
   existingSetup
 ) => {
-  const existingRooms =
-    existingSetup.rooms || [];
-  const existingCourses =
-    existingSetup.courses || [];
-  const existingSubjects =
-    existingSetup.subjects || [];
-  const existingFaculty =
-    existingSetup.faculty || [];
+  const existingCampuses = existingSetup.campuses || [];
+  const existingRooms = existingSetup.rooms || [];
+  const existingCourses = existingSetup.courses || [];
+  const existingSubjects = existingSetup.subjects || [];
+  const existingFaculty = existingSetup.faculty || [];
 
-  // ---- Merge Institution (override non-empty fields) ----
-  const mergedInstitution = { ...existingSetup.institution };
-  if (imported.institution) {
-    Object.entries(imported.institution).forEach(([key, value]) => {
-      if (value !== "" && value !== undefined && value !== null) {
-        mergedInstitution[key] = value;
-      }
-    });
+  // ---- Merge Institution (override non-empty fields only) ----
+  const mergedInstitution = { ...(existingSetup.institution || {}) };
+  Object.entries(imported.institution || {}).forEach(([key, value]) => {
+    if (hasMergeValue(value)) {
+      mergedInstitution[key] = typeof value === "string" ? value.trim() : value;
+    }
+  });
+
+  if (mergedInstitution.type) {
+    const normalizedType = normalizeInstitutionType(mergedInstitution.type);
+    if (normalizedType) mergedInstitution.type = normalizedType;
   }
 
-  // ---- Merge Campuses (deduplicate by name) ----
-  const existingCampusNames = new Set(
-    (existingSetup.campuses || []).map((c) =>
-      String(c.name || "").trim().toLowerCase()
-    )
-  );
+  // ---- Merge Campuses and buildings (deduplicate by name) ----
+  const mergedCampuses = existingCampuses.map((campus) => ({
+    ...campus,
+    buildings: (campus.buildings || []).map((building) => ({ ...building })),
+  }));
 
-  const newCampuses = (imported.campuses || []).filter((campus) => {
-    const key = String(campus.name || "").trim().toLowerCase();
-    return key && !existingCampusNames.has(key);
+  const campusByName = new Map();
+  mergedCampuses.forEach((campus) => {
+    campusByName.set(normalizeKey(campus.name), campus);
   });
 
-  const mergedCampuses = [
-    ...(existingSetup.campuses || []),
-    ...newCampuses.map((campus) => ({
-      ...campus,
-      id: campus.id || createId("campus"),
-      buildings: (campus.buildings || []).map((b) => ({
-        ...b,
-        id: b.id || createId("building"),
-      })),
-    })),
-  ];
+  let campusesAdded = 0;
+  let buildingsAdded = 0;
 
-  // ---- Merge Rooms (deduplicate by roomNumber) ----
-  const existingRoomNumbers = new Set(
-    existingRooms.map((r) =>
-      String(r.roomNumber || r.name || "")
-        .trim()
-        .toLowerCase()
-    )
-  );
+  (imported.campuses || []).forEach((campus) => {
+    const campusName = String(campus.name || "").trim();
+    if (!campusName) return;
 
-  const newRooms = imported.rooms.filter((room) => {
-    const key = String(room.roomNumber || "")
-      .trim()
-      .toLowerCase();
-    return key && !existingRoomNumbers.has(key);
+    let target = campusByName.get(normalizeKey(campusName));
+    if (!target) {
+      target = {
+        ...campus,
+        id: campus.id || createId("campus"),
+        name: campusName,
+        buildings: [],
+      };
+      mergedCampuses.push(target);
+      campusByName.set(normalizeKey(campusName), target);
+      campusesAdded += 1;
+    }
+
+    if (!target.buildings) target.buildings = [];
+
+    (campus.buildings || []).forEach((building) => {
+      const buildingName = String(building.name || "").trim();
+      if (!buildingName) return;
+
+      const existingBuilding = target.buildings.find(
+        (item) => normalizeKey(item.name) === normalizeKey(buildingName)
+      );
+
+      if (existingBuilding) {
+        if (!existingBuilding.code && building.code) {
+          existingBuilding.code = building.code;
+        }
+        return;
+      }
+
+      target.buildings.push({
+        ...building,
+        id: building.id || createId("building"),
+        name: buildingName,
+      });
+      buildingsAdded += 1;
+    });
   });
 
-  const mergedRooms = [
-    ...existingRooms,
-    ...newRooms.map((room) => ({
+  const campusIdByName = new Map();
+  const campusNameById = new Map();
+  const buildingIdByKey = new Map();
+  const buildingNameById = new Map();
+
+  mergedCampuses.forEach((campus) => {
+    const campusKey = normalizeKey(campus.name);
+    campusIdByName.set(campusKey, campus.id);
+    campusNameById.set(String(campus.id), campus.name || "");
+
+    (campus.buildings || []).forEach((building) => {
+      const buildingKey = normalizeKey(building.name);
+      if (!buildingKey) return;
+      buildingIdByKey.set(`${campusKey}|${buildingKey}`, building.id);
+      if (!buildingIdByKey.has(buildingKey)) {
+        buildingIdByKey.set(buildingKey, building.id);
+      }
+      buildingNameById.set(String(building.id), building.name || "");
+    });
+  });
+
+  const resolveCampusId = (campusName) =>
+    campusIdByName.get(normalizeKey(campusName)) || "";
+
+  const resolveBuildingId = (campusName, buildingName) => {
+    const campusKey = normalizeKey(campusName);
+    const buildingKey = normalizeKey(buildingName);
+    if (!buildingKey) return "";
+    return (
+      buildingIdByKey.get(`${campusKey}|${buildingKey}`) ||
+      buildingIdByKey.get(buildingKey) ||
+      ""
+    );
+  };
+
+  const totalCampusCount = new Set(
+    mergedCampuses.map((campus) => normalizeKey(campus.name)).filter(Boolean)
+  ).size;
+  const importedMode = normalizeCampusMode(imported.campusMode);
+  let mergedCampusMode = importedMode || normalizeCampusMode(existingSetup.campusMode) || "single";
+  if (!importedMode && totalCampusCount > 1) {
+    mergedCampusMode = "multiple";
+  }
+
+  // ---- Merge Rooms (deduplicate by room number + campus + building) ----
+  const roomKey = (room) => {
+    const campusName =
+      room.campusName || campusNameById.get(String(room.campusId)) || "";
+    const buildingName =
+      room.buildingName || buildingNameById.get(String(room.buildingId)) || "";
+    return `${normalizeKey(room.roomNumber || room.name)}|${normalizeKey(campusName)}|${normalizeKey(buildingName)}`;
+  };
+
+  const existingRoomKeys = new Set(existingRooms.map(roomKey));
+  const mergedRooms = existingRooms.map((room) => ({ ...room }));
+  let roomsAdded = 0;
+
+  (imported.rooms || []).forEach((room) => {
+    const roomNumber = String(room.roomNumber || "").trim();
+    if (!roomNumber) return;
+
+    const campusName = String(room.campusName || "").trim();
+    const buildingName = String(room.buildingName || "").trim();
+    const campusId = room.campusId || resolveCampusId(campusName);
+    const buildingId = room.buildingId || resolveBuildingId(campusName, buildingName);
+
+    const nextRoom = {
       ...room,
       id: room.id || createId("room"),
-    })),
-  ];
+      roomNumber,
+      name: roomNumber,
+      campusName,
+      campusId,
+      buildingName,
+      buildingId,
+    };
 
-  // ---- Merge Courses (deduplicate by name) ----
-  const existingCourseNames = new Set(
-    existingCourses.map((c) =>
-      String(c.name || "")
-        .trim()
-        .toLowerCase()
-    )
-  );
+    const key = roomKey(nextRoom);
+    if (!normalizeKey(roomNumber) || existingRoomKeys.has(key)) return;
 
-  const newCourses = imported.courses.filter((course) => {
-    const key = String(course.name || "")
-      .trim()
-      .toLowerCase();
-    return key && !existingCourseNames.has(key);
+    existingRoomKeys.add(key);
+    mergedRooms.push(nextRoom);
+    roomsAdded += 1;
   });
 
-  const mergedCourses = [
-    ...existingCourses,
-    ...newCourses.map((course) => ({
+  // ---- Merge Courses (deduplicate by name, fill missing location) ----
+  const mergedCourses = existingCourses.map((course) => ({
+    ...course,
+    batches: (course.batches || []).map((batch) => ({ ...batch })),
+  }));
+
+  const courseByName = new Map();
+  mergedCourses.forEach((course) => {
+    courseByName.set(normalizeKey(course.name), course);
+  });
+
+  let coursesAdded = 0;
+  (imported.courses || []).forEach((course) => {
+    const courseName = String(course.name || "").trim();
+    if (!courseName) return;
+
+    const campusName = String(course.campusName || "").trim();
+    const buildingName = String(course.buildingName || "").trim();
+    const campusId = course.campusId || resolveCampusId(campusName);
+    const buildingId = course.buildingId || resolveBuildingId(campusName, buildingName);
+
+    const existingCourse = courseByName.get(normalizeKey(courseName));
+    if (existingCourse) {
+      if (!existingCourse.code && course.code) existingCourse.code = course.code;
+      if (!existingCourse.campusId && campusId) existingCourse.campusId = campusId;
+      if (!existingCourse.buildingId && buildingId) existingCourse.buildingId = buildingId;
+      if (!existingCourse.campusName && campusName) existingCourse.campusName = campusName;
+      if (!existingCourse.buildingName && buildingName) existingCourse.buildingName = buildingName;
+      return;
+    }
+
+    const nextCourse = {
       ...course,
       id: course.id || createId("course"),
-    })),
-  ];
+      name: courseName,
+      campusId,
+      buildingId,
+      campusName,
+      buildingName,
+      batches: [],
+    };
 
-  // ---- Build courseId lookup by course name ----
-  const courseIdByName = new Map();
-  mergedCourses.forEach((course) => {
-    courseIdByName.set(
-      String(course.name || "")
-        .trim()
-        .toLowerCase(),
-      course.id
-    );
+    mergedCourses.push(nextCourse);
+    courseByName.set(normalizeKey(courseName), nextCourse);
+    coursesAdded += 1;
   });
 
-  // ---- Merge Batches into courses (deduplicate by courseName + batchName) ----
-  if (imported.batches && imported.batches.length > 0) {
-    imported.batches.forEach((batch) => {
-      const courseId = courseIdByName.get(
-        (batch.courseName || "").toLowerCase()
-      );
-      if (!courseId) return;
+  // ---- Merge Batches (deduplicate by course + batch name + admission year) ----
+  const batchKey = (batch) =>
+    `${normalizeKey(batch.name || batch.batchName)}|${Number(batch.admissionYear) || new Date().getFullYear()}`;
 
-      const course = mergedCourses.find((c) => c.id === courseId);
-      if (!course) return;
+  let batchesAdded = 0;
+  (imported.batches || []).forEach((batch) => {
+    const courseName = String(batch.courseName || "").trim();
+    const course = courseByName.get(normalizeKey(courseName));
+    if (!course) return;
 
-      if (!course.batches) course.batches = [];
+    const admissionYear = Number(batch.admissionYear) || new Date().getFullYear();
+    const batchName = String(batch.batchName || `${courseName} ${admissionYear}`).trim();
 
-      const exists = course.batches.some(
-        (b) =>
-          (b.name || "").toLowerCase() === (batch.batchName || "").toLowerCase()
-      );
-      if (!exists) {
-        course.batches.push({
-          id: createId("batch"),
-          name: batch.batchName,
-          admissionYear: batch.admissionYear,
-          courseId,
-          duration: "",
-          currentSemester: 1,
-          studentCount: batch.studentCount || 60,
-          requiredTimetable: true,
-          sectionCount: 1,
-          groupsPerSection: 2,
-          groupsEnabled: false,
-          sections: [],
-        });
-      }
+    if (!course.batches) course.batches = [];
+
+    const exists = course.batches.some(
+      (item) =>
+        batchKey(item) ===
+        `${normalizeKey(batchName)}|${admissionYear}`
+    );
+    if (exists) return;
+
+    const studentCount = Number(batch.studentCount) || 60;
+    const sections = createSections(studentCount, 1, false, 2);
+    if (batch.sectionNumber) {
+      sections[0].number = Number(batch.sectionNumber) || 1;
+    }
+
+    course.batches.push({
+      id: batch.id || createId("batch"),
+      name: batchName,
+      admissionYear,
+      admissionMonth: batch.admissionMonth || "",
+      courseId: course.id,
+      duration: "",
+      currentSemester: 1,
+      studentCount,
+      requiredTimetable: true,
+      sectionCount: 1,
+      groupsPerSection: 2,
+      groupsEnabled: false,
+      sections,
     });
-  }
+    batchesAdded += 1;
+  });
 
   // ---- Merge Subjects (deduplicate by code if present, else by name) ----
-  const existingSubjectKeys = new Set(
-    existingSubjects.map((s) => {
-      const code = String(s.code || "")
-        .trim()
-        .toLowerCase();
-      const name = String(s.name || "")
-        .trim()
-        .toLowerCase();
-      return code || name;
-    })
-  );
+  const mergedSubjects = existingSubjects.map((subject) => ({
+    ...subject,
+    batchIds: [...(subject.batchIds || [])],
+    facultyIds: [...(subject.facultyIds || [])],
+  }));
 
-  const newSubjects = imported.subjects.filter(
-    (subject) => {
-      const code = String(subject.code || "")
-        .trim()
-        .toLowerCase();
-      const name = String(subject.name || "")
-        .trim()
-        .toLowerCase();
-      const key = code || name;
-      return key && !existingSubjectKeys.has(key);
-    }
-  );
-
-  const mergedSubjects = [
-    ...existingSubjects,
-    ...newSubjects.map((subject) => {
-      const courseId =
-        courseIdByName.get(
-          (subject.courseName || "").toLowerCase()
-        ) || "";
-
-      return {
-        ...subject,
-        id: subject.id || createId("subject"),
-        courseId,
-      };
-    }),
-  ];
-
-  // ---- Merge Faculty (deduplicate by employeeId, else by name) ----
-  const existingFacultyKeys = new Set();
-  existingFaculty.forEach((f) => {
-    const empId = String(f.employeeId || "")
-      .trim()
-      .toLowerCase();
-    const name = String(f.name || "")
-      .trim()
-      .toLowerCase();
-    if (empId) existingFacultyKeys.add(`emp:${empId}`);
-    if (name) existingFacultyKeys.add(`name:${name}`);
+  const subjectByCode = new Map();
+  const subjectByName = new Map();
+  mergedSubjects.forEach((subject) => {
+    const code = normalizeKey(subject.code);
+    const name = normalizeKey(subject.name);
+    if (code) subjectByCode.set(code, subject);
+    if (name) subjectByName.set(name, subject);
   });
 
-  const newFaculty = imported.faculty.filter((person) => {
-    const empId = String(person.employeeId || "")
-      .trim()
-      .toLowerCase();
-    const name = String(person.name || "")
-      .trim()
-      .toLowerCase();
+  let subjectsAdded = 0;
+  (imported.subjects || []).forEach((subject) => {
+    const code = normalizeKey(subject.code);
+    const name = normalizeKey(subject.name);
+    if (!code && !name) return;
 
-    if (empId && existingFacultyKeys.has(`emp:${empId}`)) {
-      return false;
+    const courseId = courseByName.get(normalizeKey(subject.courseName))?.id || "";
+    const existingSubject =
+      (code && subjectByCode.get(code)) || subjectByName.get(name);
+
+    if (existingSubject) {
+      if (!existingSubject.code && subject.code) existingSubject.code = subject.code;
+      if (!existingSubject.name && subject.name) existingSubject.name = subject.name;
+      if (!existingSubject.courseId && courseId) existingSubject.courseId = courseId;
+      if (code) subjectByCode.set(code, existingSubject);
+      return;
     }
 
-    if (name && existingFacultyKeys.has(`name:${name}`)) {
-      return false;
-    }
+    const nextSubject = {
+      ...subject,
+      id: subject.id || createId("subject"),
+      courseId,
+      batchIds: [...(subject.batchIds || [])],
+      facultyIds: [...(subject.facultyIds || [])],
+    };
 
-    return true;
+    mergedSubjects.push(nextSubject);
+    if (code) subjectByCode.set(code, nextSubject);
+    if (name) subjectByName.set(name, nextSubject);
+    subjectsAdded += 1;
   });
 
   // ---- Map subject codes to subject IDs ----
   const subjectIdByCode = new Map();
-  mergedSubjects.forEach((s) => {
-    const code = String(s.code || "")
-      .trim()
-      .toLowerCase();
-    if (code) {
-      subjectIdByCode.set(code, s.id);
-    }
+  mergedSubjects.forEach((subject) => {
+    const code = normalizeKey(subject.code);
+    if (code) subjectIdByCode.set(code, subject.id);
   });
 
-  const mergedFaculty = [
-    ...existingFaculty,
-    ...newFaculty.map((person) => {
-      const subjectIds = (person.subjectCodes || [])
-        .map((code) =>
-          subjectIdByCode.get(code.toLowerCase())
-        )
-        .filter(Boolean);
+  // ---- Merge Faculty (deduplicate by employeeId, else by name) ----
+  const mergedFaculty = existingFaculty.map((person) => ({
+    ...person,
+    subjectIds: [...(person.subjectIds || [])],
+  }));
 
-      return {
-        ...person,
-        id: person.id || createId("faculty"),
-        subjectIds: [
-          ...new Set([...(person.subjectIds || []), ...subjectIds]),
-        ],
-      };
-    }),
-  ];
+  const facultyByEmployeeId = new Map();
+  const facultyByName = new Map();
+  mergedFaculty.forEach((person) => {
+    const employeeId = normalizeKey(person.employeeId);
+    const name = normalizeKey(person.name);
+    if (employeeId) facultyByEmployeeId.set(employeeId, person);
+    if (name) facultyByName.set(name, person);
+  });
+
+  let facultyAdded = 0;
+  (imported.faculty || []).forEach((person) => {
+    const name = String(person.name || "").trim();
+    if (!name) return;
+
+    const employeeId = String(person.employeeId || "").trim();
+    const existingPerson =
+      (employeeId && facultyByEmployeeId.get(normalizeKey(employeeId))) ||
+      facultyByName.get(normalizeKey(name));
+
+    const subjectIds = (person.subjectCodes || [])
+      .map((code) => subjectIdByCode.get(normalizeKey(code)))
+      .filter(Boolean);
+
+    if (existingPerson) {
+      if (!existingPerson.employeeId && employeeId) existingPerson.employeeId = employeeId;
+      if (!existingPerson.department && person.department) existingPerson.department = person.department;
+      if (!existingPerson.maxClassesPerDay && person.maxClassesPerDay != null) {
+        existingPerson.maxClassesPerDay = person.maxClassesPerDay;
+      }
+      if (
+        (!existingPerson.availableDays || existingPerson.availableDays.length === 0) &&
+        person.availableDays?.length
+      ) {
+        existingPerson.availableDays = person.availableDays;
+      }
+      existingPerson.subjectIds = [
+        ...new Set([...(existingPerson.subjectIds || []), ...subjectIds]),
+      ];
+      return;
+    }
+
+    const nextPerson = {
+      ...person,
+      id: person.id || createId("faculty"),
+      name,
+      employeeId,
+      department: person.department || "",
+      subjectIds: [
+        ...new Set([...(person.subjectIds || []), ...subjectIds]),
+      ],
+      maxClassesPerDay: person.maxClassesPerDay ?? 4,
+      availableDays: person.availableDays?.length
+        ? person.availableDays
+        : ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    };
+
+    mergedFaculty.push(nextPerson);
+    const employeeKey = normalizeKey(employeeId);
+    if (employeeKey) facultyByEmployeeId.set(employeeKey, nextPerson);
+    facultyByName.set(normalizeKey(name), nextPerson);
+    facultyAdded += 1;
+  });
+
+  // ---- Keep subject.facultyIds and faculty.subjectIds in sync ----
+  const facultyById = new Map(mergedFaculty.map((person) => [person.id, person]));
+
+  mergedSubjects.forEach((subject) => {
+    (subject.facultyIds || []).forEach((facultyId) => {
+      const person = facultyById.get(facultyId);
+      if (!person) return;
+      person.subjectIds = [
+        ...new Set([...(person.subjectIds || []), subject.id]),
+      ];
+    });
+  });
+
+  const facultyIdsBySubject = new Map();
+  mergedFaculty.forEach((person) => {
+    (person.subjectIds || []).forEach((subjectId) => {
+      const ids = facultyIdsBySubject.get(subjectId) || new Set();
+      ids.add(person.id);
+      facultyIdsBySubject.set(subjectId, ids);
+    });
+  });
+
+  mergedSubjects.forEach((subject) => {
+    const ids = facultyIdsBySubject.get(subject.id) || new Set();
+    subject.facultyIds = [...new Set([...(subject.facultyIds || []), ...ids])];
+  });
 
   // ---- Merge Availability (override non-empty fields) ----
-  const mergedAvailability = { ...existingSetup.availability };
-  if (imported.availability) {
-    Object.entries(imported.availability).forEach(([key, value]) => {
-      if (value !== "" && value !== undefined && value !== null) {
-        mergedAvailability[key] = value;
-      }
-    });
-  }
+  const mergedAvailability = { ...(existingSetup.availability || {}) };
+  Object.entries(imported.availability || {}).forEach(([key, value]) => {
+    if (hasMergeValue(value)) mergedAvailability[key] = value;
+  });
 
   // ---- Merge Constraints (override non-empty fields) ----
-  const mergedConstraints = { ...existingSetup.constraints };
-  if (imported.constraints) {
-    Object.entries(imported.constraints).forEach(([key, value]) => {
-      if (value !== "" && value !== undefined && value !== null) {
-        mergedConstraints[key] = value;
-      }
-    });
-  }
+  const mergedConstraints = { ...(existingSetup.constraints || {}) };
+  Object.entries(imported.constraints || {}).forEach(([key, value]) => {
+    if (hasMergeValue(value)) mergedConstraints[key] = value;
+  });
 
   return {
     ...existingSetup,
     institution: mergedInstitution,
+    campusMode: mergedCampusMode,
     campuses: mergedCampuses,
     rooms: mergedRooms,
     courses: mergedCourses,
@@ -1171,10 +1509,13 @@ export const mergeImportedSetup = (
     availability: mergedAvailability,
     constraints: mergedConstraints,
     mergeStats: {
-      roomsAdded: newRooms.length,
-      coursesAdded: newCourses.length,
-      subjectsAdded: newSubjects.length,
-      facultyAdded: newFaculty.length,
+      campusesAdded,
+      buildingsAdded,
+      roomsAdded,
+      coursesAdded,
+      batchesAdded,
+      subjectsAdded,
+      facultyAdded,
     },
   };
 };

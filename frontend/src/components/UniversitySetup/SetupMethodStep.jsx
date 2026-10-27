@@ -5,11 +5,11 @@
 
 import { useRef, useState } from "react";
 import { downloadSetupTemplate } from "../../utils/setupExcelExport";
-import { importSetupFile, validateImportedSetup, mergeImportedSetup } from "../../utils/setupExcelImport";
+import { importSetupFile, validateImportedSetup } from "../../utils/setupExcelImport";
 import SetupStepIllustrations from "./SetupStepIllustrations";
 import "./SetupMethodStep.css";
 
-function SetupMethodStep({ onManualSetup, onExcelImport }) {
+function SetupMethodStep({ setup = {}, onManualSetup, onExcelImport }) {
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [importStatus, setImportStatus] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -30,9 +30,10 @@ function SetupMethodStep({ onManualSetup, onExcelImport }) {
     setImportStatus({ type: "loading", message: "Importing setup data from file..." });
     try {
       const importedData = await importSetupFile(file);
-      const validation = validateImportedSetup(importedData);
-      if (validation.errors.length > 0) {
-        setImportStatus({ type: "error", message: `Import errors: ${validation.errors.join("; ")}` });
+      const validation = validateImportedSetup(importedData, setup);
+      const importErrors = [...(importedData.errors || []), ...validation.errors];
+      if (importErrors.length > 0) {
+        setImportStatus({ type: "error", message: `Import errors: ${importErrors.join("; ")}` });
         setImporting(false);
         return;
       }

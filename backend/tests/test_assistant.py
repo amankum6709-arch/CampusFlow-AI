@@ -58,6 +58,7 @@ ORG_ID = "org-assistant-test"
 OTHER_ORG_ID = "org-assistant-other"
 USER_ID = "user-assistant-test"
 OTHER_USER_ID = "user-assistant-other"
+MEMBER_ID = "user-assistant-member"
 RUN_ID = "run-assistant-1"
 EMPTY_RUN_ID = "run-assistant-empty"
 
@@ -101,9 +102,11 @@ def setup_db():
         ])
         db.flush()
         db.add(User(id=USER_ID, organization_id=ORG_ID, email="ai@test.com",
-                    name="AI Tester", password_hash=hash_password("pass")))
+                    name="AI Tester", password_hash=hash_password("pass"), role="admin"))
         db.add(User(id=OTHER_USER_ID, organization_id=OTHER_ORG_ID, email="other@test.com",
-                    name="Other", password_hash=hash_password("pass")))
+                    name="Other", password_hash=hash_password("pass"), role="admin"))
+        db.add(User(id=MEMBER_ID, organization_id=ORG_ID, email="member-ai@test.com",
+                    name="AI Member", password_hash=hash_password("pass"), role="member"))
         db.add(Course(id="c1", organization_id=ORG_ID, name="BSc CS"))
         db.add_all([
             Faculty(id="f1", organization_id=ORG_ID, name="Dr Sharma"),
@@ -362,6 +365,43 @@ def test_auth_required_and_org_scoped():
     res = client.post(f"/api/v1/assistant/runs/{RUN_ID}/propose",
                       json={"intent": "fix_all", "params": {}}, headers=_auth(OTHER_USER_ID))
     assert res.status_code == 403
+
+
+def test_member_can_read_but_cannot_mutate_assistant():
+    member_headers = _auth(MEMBER_ID)
+
+    assert client.post(
+        f"/api/v1/assistant/runs/{RUN_ID}/analyze", headers=member_headers
+    ).status_code == 200
+    assert client.post(
+        f"/api/v1/assistant/runs/{RUN_ID}/chat",
+        json={"message": "Which faculty has the highest workload?"},
+        headers=member_headers,
+    ).status_code == 200
+
+    assert client.post(
+        f"/api/v1/assistant/runs/{RUN_ID}/propose",
+        json={"intent": "fix_all", "params": {}},
+        headers=member_headers,
+    ).status_code == 403
+
+    pid = client.post(
+        f"/api/v1/assistant/runs/{RUN_ID}/propose",
+        json={"intent": "fix_all", "params": {}},
+        headers=_auth(),
+    ).json()["id"]
+    before = _entries_snapshot()
+
+    assert client.post(
+        f"/api/v1/assistant/proposals/{pid}/approve", headers=member_headers
+    ).status_code == 403
+    assert client.post(
+        f"/api/v1/assistant/proposals/{pid}/cancel", headers=member_headers
+    ).status_code == 403
+    assert _entries_snapshot() == before
+    assert client.get(
+        f"/api/v1/assistant/proposals/{pid}", headers=_auth()
+    ).json()["status"] == "pending"
 
 
 def test_chat_fix_intent_returns_action():

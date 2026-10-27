@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy import delete, select, and_
 from sqlalchemy.orm import Session
 
-from ...core.security import get_current_user, require_org_scoped
+from ...core.security import get_current_user, require_admin, require_org_scoped
 from ...db.session import get_db
 from ...models import Course, Faculty, Organization, Room, TimetableEntry, TimetableRun, User, AcademicSession
 from ...schemas.common import GenerateRequest, RunRead, TimetableEntryRead, TimetableEntryUpdate
@@ -17,12 +17,81 @@ from ...services.scheduler import run_timetable_job, solve
 router = APIRouter(prefix="/timetable", tags=["timetable"])
 
 
+def _as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return value
+    return [value]
+
+
+def _validate_configuration_ids(db: Session, organization_id: str, configuration: dict) -> None:
+    sessions = configuration.get("sessions") or configuration.get("subjects") or configuration.get("courses") or []
+    rooms = configuration.get("rooms") or []
+    faculty = configuration.get("faculty") or []
+
+    course_ids = set()
+    faculty_ids = set()
+    room_ids = set()
+
+    for session in _as_list(sessions):
+        if not isinstance(session, dict):
+            continue
+        course_id = session.get("courseId") or session.get("course_id")
+        if course_id:
+            course_ids.add(str(course_id))
+        faculty_id = session.get("facultyId") or session.get("faculty_id")
+        if faculty_id:
+            faculty_ids.add(str(faculty_id))
+        for item_id in _as_list(session.get("facultyIds") or session.get("faculty_ids")):
+            if item_id:
+                faculty_ids.add(str(item_id))
+
+    for person in _as_list(faculty):
+        if isinstance(person, dict) and person.get("id"):
+            faculty_ids.add(str(person["id"]))
+
+    for room in _as_list(rooms):
+        if isinstance(room, dict) and room.get("id"):
+            room_ids.add(str(room["id"]))
+
+    missing = []
+    if course_ids:
+        found = set(db.scalars(select(Course.id).where(
+            Course.organization_id == organization_id,
+            Course.id.in_(course_ids),
+        )).all())
+        if found != course_ids:
+            missing.append(f"course IDs {', '.join(sorted(course_ids - found))}")
+    if faculty_ids:
+        found = set(db.scalars(select(Faculty.id).where(
+            Faculty.organization_id == organization_id,
+            Faculty.id.in_(faculty_ids),
+        )).all())
+        if found != faculty_ids:
+            missing.append(f"faculty IDs {', '.join(sorted(faculty_ids - found))}")
+    if room_ids:
+        found = set(db.scalars(select(Room.id).where(
+            Room.organization_id == organization_id,
+            Room.id.in_(room_ids),
+        )).all())
+        if found != room_ids:
+            missing.append(f"room IDs {', '.join(sorted(room_ids - found))}")
+
+    if missing:
+        raise HTTPException(
+            400,
+            "Configuration contains unknown or cross-organization " + "; ".join(missing),
+        )
+
+
 @router.post("/generate", response_model=RunRead, status_code=202)
-def generate(payload: GenerateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def generate(payload: GenerateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     org = db.get(Organization, payload.organization_id)
     if not org:
         raise HTTPException(404, "Organization not found")
     require_org_scoped(payload.organization_id, user)
+    _validate_configuration_ids(db, payload.organization_id, payload.configuration)
     run = TimetableRun(
         organization_id=payload.organization_id,
         status="QUEUED",
@@ -822,7 +891,7 @@ def ai_modify(
     run_id: str,
     request: dict,
     background_tasks: BackgroundTasks,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """Natural language timetable modification with Hindi/Hinglish support.
@@ -892,7 +961,7 @@ def update_entry(
     run_id: str,
     entry_id: str,
     payload: TimetableEntryUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     run = db.get(TimetableRun, run_id)

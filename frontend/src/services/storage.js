@@ -5,7 +5,7 @@
 //                doosri organization ka data leak na ho.
 // ============================================================
 
-import { SETUP_STORAGE_KEY } from "../utils/constants";
+import { SETUP_STORAGE_KEY } from "../utils/constants.js";
 
 function orgKey(organizationId) {
   if (!organizationId) return SETUP_STORAGE_KEY;
@@ -50,11 +50,22 @@ export const loadSetup = (organizationId) => {
   }
 };
 
+export const loadSetupForOrganization = (organizationId) => {
+  try {
+    const orgId = organizationId || currentOrgId();
+    if (!orgId) return null;
+    const saved = localStorage.getItem(orgKey(orgId));
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.error("CampusFlow organization setup load error:", error);
+    return null;
+  }
+};
+
 export const clearSetup = (organizationId) => {
   const orgId = organizationId || currentOrgId();
   const key = orgKey(orgId);
   localStorage.removeItem(key);
-  // Also clear the legacy non-org-specific key if clearing for current org
   if (!orgId) {
     localStorage.removeItem(SETUP_STORAGE_KEY);
   }

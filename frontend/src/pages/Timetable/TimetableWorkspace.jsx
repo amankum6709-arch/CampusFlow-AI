@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../../services/api";
+import { loadSetupForOrganization } from "../../services/storage";
+import {
+  buildCourseOptions,
+  buildTimetableGroups,
+  formatBatchLabel,
+  formatTimetableHeading,
+  formatTimetableMeta,
+} from "../../services/timetableGroups";
 import { hasFeature, FEATURES } from "../../utils/subscription";
 import UpgradePrompt from "../../components/UpgradePrompt/UpgradePrompt";
 import AIAssistantPanel from "../../components/AIAssistant/AIAssistantPanel";
@@ -26,6 +34,16 @@ function getSubjectColor(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
   return SUBJECT_COLORS[Math.abs(hash) % SUBJECT_COLORS.length];
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]);
 }
 
 function currentOrgId() {
@@ -66,8 +84,10 @@ function TimetableWorkspace() {
   const [dragged, setDragged] = useState(null);
   const [selectedRun, setSelectedRun] = useState(null);
   const [filter, setFilter] = useState("all");
-  const [viewMode, setViewMode] = useState("section");
+  const [viewMode, setViewMode] = useState("batch");
   const [viewFilter, setViewFilter] = useState("all");
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedGroupKey, setSelectedGroupKey] = useState("");
   const [asking, setAsking] = useState(false);
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiAnswer, setAiAnswer] = useState("");
@@ -78,7 +98,7 @@ function TimetableWorkspace() {
   const exportRef = useRef(null);
   const organizationId = currentOrgId();
   const requestedRunId = searchParams.get("run");
-  const config = selectedRun?.configuration || {};
+  const config = useMemo(() => selectedRun?.configuration || {}, [selectedRun]);
   const days = config.days?.length ? config.days : DEFAULT_DAYS;
   const periodTimes = useMemo(() => getPeriodTimes(config), [config]);
   const periodCount = Number(config.period_count) || Object.keys(periodTimes).length || 8;
@@ -89,6 +109,28 @@ function TimetableWorkspace() {
   const [lunchH, lunchM] = lunchStart.split(":").map(Number);
   const lunchEndMinutes = lunchH * 60 + lunchM + lunchDuration;
   const lunchEnd = `${String(Math.floor(lunchEndMinutes / 60)).padStart(2, "0")}:${String(lunchEndMinutes % 60).padStart(2, "0")}`;
+  const setup = useMemo(() => loadSetupForOrganization(organizationId), [organizationId]);
+  const timetableGroups = useMemo(
+    () => buildTimetableGroups(entries, { configuration: config, setup }),
+    [entries, config, setup],
+  );
+  const displayEntries = useMemo(
+    () => timetableGroups.flatMap((group) => group.entries),
+    [timetableGroups],
+  );
+  const courseOptions = useMemo(() => buildCourseOptions(timetableGroups), [timetableGroups]);
+  const activeCourseId = useMemo(() => {
+    if (courseOptions.some((option) => option.id === selectedCourseId)) return selectedCourseId;
+    return courseOptions[0]?.id || "";
+  }, [courseOptions, selectedCourseId]);
+  const courseGroups = useMemo(
+    () => timetableGroups.filter((group) => group.courseKey === activeCourseId),
+    [timetableGroups, activeCourseId],
+  );
+  const activeGroup = useMemo(
+    () => courseGroups.find((group) => group.key === selectedGroupKey) || courseGroups[0] || null,
+    [courseGroups, selectedGroupKey],
+  );
 
   const loadRuns = useCallback(async () => {
     if (!organizationId) return;
@@ -141,6 +183,8 @@ function TimetableWorkspace() {
     setShowExportMenu(false);
     const win = window.open("", "_blank");
     if (!win) return;
+    const printHeading = viewMode === "batch" && activeGroup ? formatTimetableHeading(activeGroup) : "CampusFlow Timetable";
+    const printMeta = viewMode === "batch" && activeGroup ? formatTimetableMeta(activeGroup) : "";
     win.document.write(`<!DOCTYPE html><html><head><title>CampusFlow Timetable</title><style>
       *{margin:0;padding:0;box-sizing:border-box}
       body{font-family:Arial,sans-serif;padding:20px;font-size:12px}
@@ -159,14 +203,14 @@ function TimetableWorkspace() {
       .empty-cell{color:#ddd}
       @media print{body{margin:5px}th,td{border:1px solid #666}}
     </style></head><body>
-      <div class="header"><h1>CampusFlow Scheduler</h1><p>Timetable</p></div>
+      <div class="header"><h1>${escapeHtml(printHeading)}</h1>${printMeta ? `<p>${escapeHtml(printMeta)}</p>` : ""}</div>
       <div id="content"></div></body></html>`);
     win.document.close();
 
     let html = '<table><thead><tr><th>Day</th>';
     periods.forEach((p) => {
       const timeStr = periodTimes[String(p)] || `P${p}`;
-      const isLunchPeriod = p === 4;
+      const isLunchPeriod = p === 4 && !hasPeriodFourEntries;
       html += `<th>${isLunchPeriod ? "Lunch" : `Period ${p}`}<br/><span style="font-weight:400;font-size:9px;color:#aaa">${isLunchPeriod ? `${lunchStart}-${lunchEnd}` : timeStr}</span></th>`;
     });
     html += "</tr></thead><tbody>";
@@ -174,23 +218,25 @@ function TimetableWorkspace() {
     days.forEach((day) => {
       html += `<tr><td class="day-cell">${day.slice(0, 3)}</td>`;
       periods.forEach((p) => {
-        if (p === 4) {
+        if (p === 4 && !hasPeriodFourEntries) {
           html += '<td class="lunch-col">Lunch</td>';
           return;
         }
-        const cellEntries = entries.filter((e) => e.day === day && Number(e.period) === p);
+        const cellEntries = visibleEntries.filter((e) => e.day === day && Number(e.period) === p);
         html += '<td class="class-cell">';
         if (cellEntries.length === 0) {
           html += '<span class="empty-cell">-</span>';
         } else {
           cellEntries.forEach((entry) => {
-            const display = entry.subject_name || entry.course_name || "—";
-            const code = entry.subject_code || entry.course_code || "";
-            html += `<div style="margin-bottom:3px"><div class="subject">${display}</div>`;
-            if (code) html += `<div class="detail">${code}</div>`;
-            html += `<div class="detail">${entry.faculty_name || ""}</div>`;
-            html += `<div class="detail">${entry.room_name || ""}</div>`;
-            if (entry.section_name) html += `<div class="detail">${entry.section_name}</div>`;
+            const display = entry.subjectName || entry.subject_name || entry.subjectCode || entry.subject_code || entry.courseName || entry.course_name || "—";
+            const rawCode = entry.subjectCode || entry.subject_code || entry.course_code || "";
+            const code = rawCode && rawCode !== display ? rawCode : "";
+            const section = entry.sectionName || entry.section_name || "";
+            html += `<div style="margin-bottom:3px"><div class="subject">${escapeHtml(display)}</div>`;
+            if (code) html += `<div class="detail">${escapeHtml(code)}</div>`;
+            html += `<div class="detail">${escapeHtml(entry.faculty_name)}</div>`;
+            html += `<div class="detail">${escapeHtml(entry.room_name)}</div>`;
+            if (section) html += `<div class="detail">${escapeHtml(section)}</div>`;
             if (entry.mode === "lab") html += '<div class="detail" style="color:#e65100;font-weight:700">LAB</div>';
             html += "</div>";
           });
@@ -235,7 +281,7 @@ function TimetableWorkspace() {
 
   const conflicts = useMemo(() => {
     const bySlot = new Map();
-    entries.forEach((entry) => {
+    displayEntries.forEach((entry) => {
       const key = `${entry.day}:${entry.period}`;
       if (!bySlot.has(key)) bySlot.set(key, []);
       bySlot.get(key).push(entry);
@@ -258,33 +304,38 @@ function TimetableWorkspace() {
       });
     });
     return bad;
-  }, [entries]);
+  }, [displayEntries]);
 
-  const sections = useMemo(() => [...new Set(entries.map((e) => e.section_name).filter(Boolean))], [entries]);
+  const sections = useMemo(
+    () => [...new Set(displayEntries.map((e) => e.sectionName || e.section_name).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    [displayEntries],
+  );
   const faculties = useMemo(() => {
     const map = new Map();
-    entries.forEach((e) => { if (e.faculty_id && e.faculty_name) map.set(e.faculty_id, e.faculty_name); });
+    displayEntries.forEach((e) => { if (e.faculty_id && e.faculty_name) map.set(e.faculty_id, e.faculty_name); });
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [entries]);
+  }, [displayEntries]);
   const rooms = useMemo(() => {
     const map = new Map();
-    entries.forEach((e) => { if (e.room_id && e.room_name) map.set(e.room_id, e.room_name); });
+    displayEntries.forEach((e) => { if (e.room_id && e.room_name) map.set(e.room_id, e.room_name); });
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [entries]);
+  }, [displayEntries]);
+  const viewFilters = viewMode === "section" ? sections : viewMode === "faculty" ? faculties : rooms;
+  const viewFilterValues = viewFilters.map((item) => typeof item === "object" ? item.id : item);
+  const activeViewFilter = viewFilter === "all" || viewFilterValues.includes(viewFilter) ? viewFilter : "all";
 
-  const visibleEntries = useMemo(() => {
-    let filtered = entries;
-    if (filter === "conflicts") filtered = filtered.filter((e) => conflicts.has(e.id));
-    if (filter === "locked") filtered = filtered.filter((e) => e.locked);
-    if (viewMode === "section" && viewFilter !== "all") {
-      filtered = filtered.filter((e) => e.section_name === viewFilter);
-    } else if (viewMode === "faculty" && viewFilter !== "all") {
-      filtered = filtered.filter((e) => e.faculty_id === viewFilter);
-    } else if (viewMode === "room" && viewFilter !== "all") {
-      filtered = filtered.filter((e) => e.room_id === viewFilter);
-    }
-    return filtered;
-  }, [entries, filter, conflicts, viewMode, viewFilter]);
+  let visibleEntries = viewMode === "batch" ? (activeGroup?.entries || []) : displayEntries;
+  if (filter === "conflicts") visibleEntries = visibleEntries.filter((e) => conflicts.has(e.id));
+  if (filter === "locked") visibleEntries = visibleEntries.filter((e) => e.locked);
+  if (viewMode === "section" && activeViewFilter !== "all") {
+    visibleEntries = visibleEntries.filter((e) => (e.sectionName || e.section_name) === activeViewFilter);
+  } else if (viewMode === "faculty" && activeViewFilter !== "all") {
+    visibleEntries = visibleEntries.filter((e) => e.faculty_id === activeViewFilter);
+  } else if (viewMode === "room" && activeViewFilter !== "all") {
+    visibleEntries = visibleEntries.filter((e) => e.room_id === activeViewFilter);
+  }
+  const hasPeriodFourEntries = visibleEntries.some((entry) => Number(entry.period) === 4);
 
   const updateEntry = async (entry, patch) => {
     try {
@@ -301,8 +352,6 @@ function TimetableWorkspace() {
     if (updated && dragged.session_id) await loadEntries();
     setDragged(null);
   };
-
-  const viewFilters = viewMode === "section" ? sections : viewMode === "faculty" ? faculties.map((f) => f.name) : rooms.map((r) => r.name);
 
   return (
     <main className="timetable-page">
@@ -350,7 +399,7 @@ function TimetableWorkspace() {
           <div className="tw-stat"><div className="tw-stat-value">{analytics.total_entries}</div><div className="tw-stat-label">Scheduled</div></div>
           <div className="tw-stat"><div className="tw-stat-value">{analytics.faculty_workload?.length || 0}</div><div className="tw-stat-label">Faculty</div></div>
           <div className="tw-stat"><div className="tw-stat-value">{analytics.room_utilization?.length || 0}</div><div className="tw-stat-label">Rooms</div></div>
-          <div className="tw-stat"><div className="tw-stat-value">{sections.length}</div><div className="tw-stat-label">Sections</div></div>
+          <div className="tw-stat"><div className="tw-stat-value">{timetableGroups.length}</div><div className="tw-stat-label">Batches</div></div>
           <div className="tw-stat tw-stat-wide"><div className="tw-stat-value">{analytics.room_utilization?.[0]?.name || "\u2014"}</div><div className="tw-stat-label">Busiest Room</div></div>
           <div className="tw-stat tw-stat-wide"><div className="tw-stat-value">{analytics.faculty_workload?.[0]?.name || "\u2014"}</div><div className="tw-stat-label">Top Faculty</div></div>
         </section>
@@ -371,6 +420,7 @@ function TimetableWorkspace() {
             <div className="tw-divider" />
             <div className="tw-filter-group">
               {[
+                ["batch", "By Batch"],
                 ["section", "By Section"],
                 ["faculty", "By Faculty"],
                 ["room", "By Room"],
@@ -378,12 +428,44 @@ function TimetableWorkspace() {
                 <button key={v} className={`tw-chip ${viewMode === v ? "tw-chip-active" : ""}`} onClick={() => { setViewMode(v); setViewFilter("all"); }}>{label}</button>
               ))}
             </div>
-            {viewFilters.length > 0 && (
+            {viewMode === "batch" ? (
+              courseOptions.length > 0 && (
+                <>
+                  <div className="tw-divider" />
+                  <select className="tw-select tw-select-sm tw-course-select" value={activeCourseId} onChange={(e) => { setSelectedCourseId(e.target.value); setSelectedGroupKey(""); }}>
+                    {courseOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}{option.code ? ` (${option.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {courseGroups.length > 0 && (
+                    <div className="tw-batch-tabs">
+                      {courseGroups.map((group) => (
+                        <button
+                          key={group.key}
+                          className={`tw-batch-tab ${group.key === activeGroup?.key ? "tw-batch-tab-active" : ""}`}
+                          onClick={() => setSelectedGroupKey(group.key)}
+                          title={formatTimetableHeading(group)}
+                        >
+                          <span>{formatBatchLabel(group.batchName)}</span>
+                          <span className="tw-batch-tab-count">{group.entryCount}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )
+            ) : viewFilters.length > 0 && (
               <>
                 <div className="tw-divider" />
-                <select className="tw-select tw-select-sm" value={viewFilter} onChange={(e) => setViewFilter(e.target.value)}>
+                <select className="tw-select tw-select-sm" value={activeViewFilter} onChange={(e) => setViewFilter(e.target.value)}>
                   <option value="all">All {viewMode === "section" ? "Sections" : viewMode === "faculty" ? "Faculty" : "Rooms"}</option>
-                  {viewFilters.map((f) => <option key={typeof f === "object" ? f.id : f} value={typeof f === "object" ? f.name : f}>{typeof f === "object" ? f.name : f}</option>)}
+                  {viewFilters.map((item) => {
+                    const value = typeof item === "object" ? item.id : item;
+                    const label = typeof item === "object" ? item.name : item;
+                    return <option key={value} value={value}>{label}</option>;
+                  })}
                 </select>
               </>
             )}
@@ -410,6 +492,16 @@ function TimetableWorkspace() {
         </section>
       )}
 
+      {runId && viewMode === "batch" && activeGroup && (
+        <section className="tw-group-heading">
+          <div>
+            <span className="tw-group-kicker">Batch timetable</span>
+            <h2>{formatTimetableHeading(activeGroup)}</h2>
+            <p>{formatTimetableMeta(activeGroup)}</p>
+          </div>
+        </section>
+      )}
+
       {!runId ? (
         <div className="tw-empty-state">
           <div className="tw-empty-icon">
@@ -427,7 +519,7 @@ function TimetableWorkspace() {
                 <th className="tw-th-day">Day</th>
                 {periods.map((p) => {
                   const timeStr = periodTimes[String(p)] || `P${p}`;
-                  const isLunch = p === 4;
+                  const isLunch = p === 4 && !hasPeriodFourEntries;
                   return (
                     <th key={p} className={`tw-th-period ${isLunch ? "tw-th-lunch" : ""}`}>
                       <div className="tw-period-number">{isLunch ? "Lunch" : `Period ${p}`}</div>
@@ -442,7 +534,7 @@ function TimetableWorkspace() {
                 <tr key={day} className="tw-tr-day">
                   <td className="tw-td-day">{day}</td>
                   {periods.map((p) => {
-                    if (p === 4) {
+                    if (p === 4 && !hasPeriodFourEntries) {
                       return (
                         <td key={`${day}-${p}`} className="tw-td-lunch">
                           <div className="tw-lunch-label">Lunch</div>
@@ -458,9 +550,11 @@ function TimetableWorkspace() {
                         onDrop={() => dropEntry(day, p)}
                       >
                         {cellEntries.map((entry) => {
-                          const color = getSubjectColor(entry.subject_name || entry.course_name);
-                          const displayName = entry.subject_name || entry.course_name || "\u2014";
-                          const code = entry.subject_code || entry.course_code || "";
+                          const displayName = entry.subjectName || entry.subject_name || entry.subjectCode || entry.subject_code || entry.courseName || entry.course_name || "\u2014";
+                          const rawCode = entry.subjectCode || entry.subject_code || entry.course_code || "";
+                          const code = rawCode && rawCode !== displayName ? rawCode : "";
+                          const section = entry.sectionName || entry.section_name || "";
+                          const color = getSubjectColor(displayName);
                           return (
                             <article
                               key={entry.id}
@@ -474,7 +568,7 @@ function TimetableWorkspace() {
                               <div className="tw-card-faculty">{entry.faculty_name || ""}</div>
                               <div className="tw-card-room">{entry.room_name || ""}</div>
                               <div className="tw-card-meta">
-                                {entry.section_name && <span className="tw-card-section">{entry.section_name}</span>}
+                                {section && <span className="tw-card-section">{section}</span>}
                                 {entry.mode === "lab" && <span className="tw-card-badge tw-card-badge-lab">LAB</span>}
                                 {entry.mode === "theory" && <span className="tw-card-badge tw-card-badge-lecture">LEC</span>}
                               </div>

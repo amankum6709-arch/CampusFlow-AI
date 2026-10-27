@@ -37,6 +37,15 @@ export const SUBJECT_TYPES = [
   "Seminar",
 ];
 
+export const INSTITUTION_TYPES = [
+  "University",
+  "College",
+  "Institute",
+  "School",
+];
+
+export const CAMPUS_MODES = ["single", "multiple"];
+
 export const TEACHING_SCOPES = [
   "section",
   "group",

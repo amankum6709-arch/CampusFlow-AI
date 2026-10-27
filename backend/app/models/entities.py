@@ -18,7 +18,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(30), default="admin")
+    role: Mapped[str] = mapped_column(String(30), default="member")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     organization = relationship("Organization")
 

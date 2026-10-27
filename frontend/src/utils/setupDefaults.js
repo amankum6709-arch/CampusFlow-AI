@@ -3,12 +3,13 @@
 // Kya karta hai: Wizard ke initial data objects provide karta hai.
 // ============================================================
 
-import { DEFAULT_CONSTRAINTS, DEFAULT_DAYS } from "./constants";
-import { createId } from "./helpers";
+import { DEFAULT_CONSTRAINTS, DEFAULT_DAYS } from "./constants.js";
+import { createId } from "./helpers.js";
 
-export const createBuilding = (name = "") => ({
+export const createBuilding = (name = "", code = "") => ({
   id: createId("building"),
   name,
+  code,
 });
 
 export const createCampus = (name = "Main Campus") => ({

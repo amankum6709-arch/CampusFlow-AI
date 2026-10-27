@@ -103,7 +103,7 @@ pip install -r backend\requirements.txt
 Copy-Item .env.example .env
 ```
 
-Re-activate the virtual environment in each new terminal. The API and Alembic read `.env` from the current working directory, so this guide creates it at the repository root.
+Re-activate the virtual environment in each new terminal. The API loads `.env` from the repository root and then lets `backend/.env` override it when present, so this guide creates it at the repository root.
 
 For PowerShell execution-policy issues, run the activation command using your normal Windows Python environment policy, or start the API with the virtual-environment interpreter directly.
 
@@ -153,14 +153,14 @@ If the API uses a different address, create `frontend/.env` from `frontend/.env.
 | Variable | Used by | Required | Purpose |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | backend | yes | PostgreSQL connection string (`postgresql+psycopg://…`) |
-| `CORS_ORIGINS` | backend | no | Allowed frontend origins (defaults to `http://localhost:5173`) |
-| `SECRET_KEY` | backend | recommended | JWT signing secret — set a long random value per environment |
+| `CORS_ORIGINS` | backend | yes in deployment | Comma-separated allowed frontend origins; defaults to none |
+| `SECRET_KEY` | backend | yes | JWT signing secret — at least 32 characters; generate a random value per environment |
 | `AI_PROVIDER` / `AI_API_KEY` | backend | no | Optional external AI provider; the assistant uses its rule-based engine when unset |
-| `VITE_API_URL` | frontend | no | API base URL (defaults to `http://localhost:8000/api/v1`) |
+| `VITE_API_URL` | frontend | yes in production build | API base URL including `/api/v1`; local development defaults to `http://localhost:8000/api/v1` |
 
-Copy the provided `.env.example` files to `.env` and fill in real values. For the workflow above, the backend `.env` is created at the repository root; `frontend/.env` is optional. Never commit `.env` files.
+Copy the provided `.env.example` files to `.env` and fill in real values, including a random `SECRET_KEY`. For the workflow above, the backend `.env` is created at the repository root; `frontend/.env` is optional. Never commit `.env` files.
 
-> **Security note:** the checked-in code currently falls back to a hardcoded development JWT secret when `SECRET_KEY` is unset. Set `SECRET_KEY` in every non-local environment.
+> **Security note:** `SECRET_KEY` is required and validated at startup; there is no hardcoded fallback. Rotating it invalidates existing tokens, so users must sign in again.
 
 ## Timetable generation flow
 

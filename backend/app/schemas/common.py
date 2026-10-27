@@ -284,6 +284,7 @@ class InstitutionSettings(BaseModel):
 class CampusBuilding(BaseModel):
     id: str = ""
     name: str = ""
+    code: str = ""
 
 
 class CampusItem(BaseModel):
@@ -330,6 +331,12 @@ class SetupResponse(BaseModel):
     campuses: list[CampusItem] = Field(default_factory=list)
     availability: AvailabilitySettings = Field(default_factory=AvailabilitySettings)
     constraints: ConstraintSettings = Field(default_factory=ConstraintSettings)
+
+
+class SetupResetResponse(BaseModel):
+    status: str = "ok"
+    organization_id: str
+    deleted: dict[str, int] = Field(default_factory=dict)
 
 
 class FacultyUpdate(BaseModel):
